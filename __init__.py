@@ -23,8 +23,8 @@
 bl_info = {   
  "name": "GYAZ Game Rigger",   
  "author": "Andras Gyalog",   
- "version": ('2'),   
- "blender": (2, 79, 0),   
+ "version": (2, 80, 0),   
+ "blender": (2, 80, 0),   
  "location": "",   
  "description": "Rig geared for real-time rendering with linear skinning.",
  "warning": "",   

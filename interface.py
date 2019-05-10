@@ -35,7 +35,7 @@ def report (self, item, error_or_info):
 # popup
 def popup (item, icon):
     def draw(self, context):
-        self.layout.label(item)
+        self.layout.label(text=item)
     bpy.context.window_manager.popup_menu(draw, title="GYAZ Game Rigger", icon=icon)
     
 def get_active_action (obj):
@@ -305,7 +305,7 @@ class Op_GYAZGameRig_SnapAndKey (bpy.types.Operator):
     
     def draw (self, context):
         lay = self.layout
-        lay.label ('Sure?')
+        lay.label (text='Sure?')
     
     def invoke (self, context, event):
         wm = context.window_manager
@@ -357,7 +357,7 @@ class Op_GYAZGameRig_Switch (bpy.types.Operator):
     bl_label = "GYAZ Game Rigger: Switch"
     bl_description = "Bind all base bones of the low-level rig to fk, ctrl/ik or nothing"
 
-    mode = EnumProperty(
+    mode: EnumProperty(
         name = 'mode',
         items = (
             ('FK', 'FK', ''),
@@ -367,7 +367,7 @@ class Op_GYAZGameRig_Switch (bpy.types.Operator):
         default = "FK",
         description = "")
         
-    is_local = BoolProperty (default=False)
+    is_local: BoolProperty (default=False)
     
     # operator function
     def execute(self, context):
@@ -412,7 +412,7 @@ class Op_GYAZGameRig_Switch (bpy.types.Operator):
                             vis = general_module_bone[vis_name] if vis_name in general_module_bone.keys () else None
                             if vis != None:
                                  general_module_bone[vis_name] = 1
-                                 rig.show_x_ray = True      
+                                 rig.show_in_front = True      
         
                             
         if is_local:
@@ -454,7 +454,7 @@ class Op_GYAZGameRig_SetVisible (bpy.types.Operator):
     bl_label = "GYAZ Game Rigger: Set Visible"
     bl_description = "Show/Hide FK, IK/CTRL, Touch"
 
-    mode = EnumProperty(
+    mode: EnumProperty(
         name = 'mode',
         items = (
             ('SHOW_FK', 'SHOW_FK', ''),
@@ -465,7 +465,7 @@ class Op_GYAZGameRig_SetVisible (bpy.types.Operator):
         default = "SHOW_FK",
         description = "")
         
-    is_local = BoolProperty (default=False)
+    is_local: BoolProperty (default=False)
     
     # operator function
     def execute(self, context):
@@ -549,7 +549,7 @@ class Op_GYAZGameRig_SetSnapPropToCurrentFrame (bpy.types.Operator):
     bl_label = "GYAZ Game Rigger: Set Snap Prop To Current Frame"
     bl_description = ""
 
-    prop_name = StringProperty(
+    prop_name: StringProperty(
         name = 'prop_name',
         default = "snap_start",
         description = "")
@@ -569,7 +569,7 @@ class Op_GYAZGameRig_SetSnapPropFKIK (bpy.types.Operator):
     bl_label = "GYAZ Game Rigger: Set Snap Prop FK IK"
     bl_description = ""
 
-    module = StringProperty(
+    module: StringProperty(
         name = 'module',
         default = '',
         description = "")
@@ -593,7 +593,7 @@ class Op_GYAZGameRig_SetSnapPropActive (bpy.types.Operator):
     bl_label = "GYAZ Game Rigger: Set Snap Prop Active"
     bl_description = ""
 
-    module = StringProperty(
+    module: StringProperty(
         name = 'module',
         default = '',
         description = "")
@@ -617,7 +617,7 @@ class Op_GYAZGameRig_HideSelectCharacterMeshes (bpy.types.Operator):
     bl_label = "GYAZ Game Rigger: Hide Select Character Meshes"
     bl_description = "Enable/Disable selecion of meshes"
     
-    hidden = BoolProperty(
+    hidden: BoolProperty(
         name = 'hidden',
         default = False)
     
@@ -656,16 +656,15 @@ class Op_GYAZGameRig_AppendSourceRig (bpy.types.Operator):
             scene = bpy.context.scene
             for obj in data_to.objects:
                 if obj is not None:
-                   scene.objects.link(obj)
+                   scene.collection.objects.link(obj)
             return data_to.objects
 
         source_path = os.path.dirname(__file__) + "/source_rigs.blend"
         
         objects = append (obj_name = "GYAZ_source_rig__biped", filepath = source_path)
-        scene = bpy.context.scene
         for obj in objects:
-            obj.select = True
-        scene.objects.active = objects[0]
+            obj.select_set (True)
+        bpy.context.view_layer.objects.active = objects[0]
             
         # end of operator
         return {'FINISHED'}
@@ -785,14 +784,14 @@ class Op_GYAZGameRig_SavePropsToAction (bpy.types.Operator):
     bl_label = "GYAZ Game Rigger: Save Props To Action"
     bl_description = "Save all props to active action / Load all props from active action"
     
-    mode = EnumProperty (items=(('SAVE', 'Save', ''), ('LOAD', 'Load', '')), default='SAVE', options={'SKIP_SAVE'})
+    mode: EnumProperty (items=(('SAVE', 'Save', ''), ('LOAD', 'Load', '')), default='SAVE', options={'SKIP_SAVE'})
     
     def draw (self, context):
         lay = self.layout
         if self.mode == 'SAVE':
-            lay.label ('Save props to action?')
+            lay.label (text='Save props to action?')
         else:
-            lay.label ('Load props from action?')
+            lay.label (text='Load props from action?')
     
     def invoke (self, context, event):
         wm = bpy.context.window_manager
@@ -855,8 +854,8 @@ class Op_GYAZGameRig_ResetProps (bpy.types.Operator):
     bl_label = "GYAZ Game Rigger: ResetProps"
     bl_description = "Reset all props or prop by name to default value"
     
-    all = BoolProperty (name='All', default=True)
-    name = StringProperty (name='Prop Name:', default='')
+    all: BoolProperty (name='All', default=True)
+    name: StringProperty (name='Prop Name:', default='')
     
     def invoke (self, context, event):
         wm = context.window_manager
@@ -918,7 +917,7 @@ class Op_GYAZGameRig_Button (bpy.types.Operator):
     
 #UI
 
-class UI_GYAZGameRig (Panel):
+class BONE_PT_GYAZGameRig (Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = 'bone'
@@ -944,37 +943,37 @@ class UI_GYAZGameRig (Panel):
                     col.prop (pbone, '["'+prop+'"]', slider=slider)
                
         row = lay.row (align=True)     
-        row.prop (rig, 'show_x_ray')
+        row.prop (rig, 'show_in_front')
         row.prop (rig_data, 'show_bone_custom_shapes', text='Shapes')
         row.operator (Op_GYAZGameRig_HideSelectCharacterMeshes.bl_idname, text='Meshes', icon='UNLOCKED').hidden = False 
         row.operator (Op_GYAZGameRig_HideSelectCharacterMeshes.bl_idname, text='', icon='LOCKED').hidden = True  
         
         row = lay.row (align=True)
-        row.label ('Props:')        
+        row.label (text='Props:')        
         row.operator (Op_GYAZGameRig_SavePropsToAction.bl_idname, text='Save').mode='SAVE'
         row.operator (Op_GYAZGameRig_SavePropsToAction.bl_idname, text='Load').mode='LOAD'
         row.operator (Op_GYAZGameRig_ResetProps.bl_idname, text='Default')        
         
-        lay.label (text = "Global:")
+        lay.label (text="Global:")
 
         row = lay.row (align=True)
-        op = row.operator (Op_GYAZGameRig_Switch.bl_idname, text = "FK", icon_value = custom_icons["switch_fk"].icon_id)
+        op = row.operator (Op_GYAZGameRig_Switch.bl_idname, text="FK", icon_value=custom_icons["switch_fk"].icon_id)
         op.is_local, op.mode = False, 'FK'
-        op = row.operator (Op_GYAZGameRig_Switch.bl_idname, text = "IK/CTRL", icon_value = custom_icons["switch_ik"].icon_id)
+        op = row.operator (Op_GYAZGameRig_Switch.bl_idname, text="IK/CTRL", icon_value=custom_icons["switch_ik"].icon_id)
         op.is_local, op.mode = False, 'IK/CTRL'
-        op = row.operator (Op_GYAZGameRig_Switch.bl_idname, text = "BASE", icon_value = custom_icons["switch_base"].icon_id)
+        op = row.operator (Op_GYAZGameRig_Switch.bl_idname, text="BASE", icon_value=custom_icons["switch_base"].icon_id)
         op.is_local, op.mode = False, 'BASE'
         
         col = lay.column (align=True)
         row = col.row (align=True)
-        op = row.operator (Op_GYAZGameRig_SetVisible.bl_idname, text = "FK", icon_value = custom_icons["visible_fk"].icon_id)
+        op = row.operator (Op_GYAZGameRig_SetVisible.bl_idname, text="FK", icon_value=custom_icons["visible_fk"].icon_id)
         op.is_local, op.mode = False, 'SHOW_FK'
-        op = row.operator (Op_GYAZGameRig_SetVisible.bl_idname, text = "FK", icon_value = custom_icons["invisible_fk"].icon_id)
+        op = row.operator (Op_GYAZGameRig_SetVisible.bl_idname, text="FK", icon_value=custom_icons["invisible_fk"].icon_id)
         op.is_local, op.mode = False, 'HIDE_FK'
         row.separator ()
-        op = row.operator (Op_GYAZGameRig_SetVisible.bl_idname, text = "IK/CTRL", icon_value = custom_icons["visible_ik"].icon_id)
+        op = row.operator (Op_GYAZGameRig_SetVisible.bl_idname, text="IK/CTRL", icon_value=custom_icons["visible_ik"].icon_id)
         op.is_local, op.mode = False, 'SHOW_IK/CTRL'
-        op = row.operator (Op_GYAZGameRig_SetVisible.bl_idname, text = "IK/CTRL", icon_value = custom_icons["invisible_ik"].icon_id)
+        op = row.operator (Op_GYAZGameRig_SetVisible.bl_idname, text="IK/CTRL", icon_value=custom_icons["invisible_ik"].icon_id)
         op.is_local, op.mode = False, 'HIDE_IK/CTRL'
 
         enabled = True if context.mode == 'POSE' else False
@@ -989,24 +988,24 @@ class UI_GYAZGameRig (Panel):
         row = lay.row ()
         row.enabled = enabled
         col = row.column (align=True)
-        op = col.operator (Op_GYAZGameRig_Switch.bl_idname, text = "Switch to FK", icon_value = custom_icons["switch_fk"].icon_id)
+        op = col.operator (Op_GYAZGameRig_Switch.bl_idname, text="Switch to FK", icon_value=custom_icons["switch_fk"].icon_id)
         op.is_local, op.mode = True, 'FK'
-        op = col.operator (Op_GYAZGameRig_Switch.bl_idname, text = "Switch to IK/CTRL", icon_value = custom_icons["switch_ik"].icon_id)
+        op = col.operator (Op_GYAZGameRig_Switch.bl_idname, text="Switch to IK/CTRL", icon_value=custom_icons["switch_ik"].icon_id)
         op.is_local, op.mode = True, 'IK/CTRL' 
         
         col = row.column (align=True)
         col.enabled = enabled
-        op = col.operator (Op_GYAZGameRig_SetVisible.bl_idname, text = "Show/Hide FK", icon_value = custom_icons["visible_fk"].icon_id)
+        op = col.operator (Op_GYAZGameRig_SetVisible.bl_idname, text="Show/Hide FK", icon_value=custom_icons["visible_fk"].icon_id)
         op.is_local, op.mode = True, 'SHOW_FK'
-        op = col.operator (Op_GYAZGameRig_SetVisible.bl_idname, text = "Show/Hide IK/CTRL", icon_value = custom_icons["visible_ik"].icon_id)
+        op = col.operator (Op_GYAZGameRig_SetVisible.bl_idname, text="Show/Hide IK/CTRL", icon_value=custom_icons["visible_ik"].icon_id)
         op.is_local, op.mode = True, 'SHOW_IK/CTRL'
         
         row = lay.row (align=True)
-        row.operator (Op_GYAZGameRig_SnapIKtoFK.bl_idname, text = "Snap IK to FK", icon_value = custom_icons["snap_ik"].icon_id)
-        row.operator (Op_GYAZGameRig_SnapFKtoIK.bl_idname, text = "Snap FK to IK", icon_value = custom_icons["snap_fk"].icon_id)
+        row.operator (Op_GYAZGameRig_SnapIKtoFK.bl_idname, text="Snap IK to FK", icon_value=custom_icons["snap_ik"].icon_id)
+        row.operator (Op_GYAZGameRig_SnapFKtoIK.bl_idname, text="Snap FK to IK", icon_value=custom_icons["snap_fk"].icon_id)
         col = lay.column ()
         col.scale_y = 2
-        col.operator (Op_GYAZGameRig_SelectModuleBones.bl_idname, text = "Select Module Bones", icon_value = custom_icons["select_bone"].icon_id)
+        col.operator (Op_GYAZGameRig_SelectModuleBones.bl_idname, text="Select Module Bones", icon_value=custom_icons["select_bone"].icon_id)
         
         # module properies
         if context.mode == 'POSE':
@@ -1036,8 +1035,8 @@ class UI_GYAZGameRig (Panel):
         if addon_utils.check ('GYAZ_export_tools') == (True, True):
             row = lay.row ()
             row.scale_x, row.scale_y = 2, 1
-            row.label ('')
-            row.operator ('object.gyaz_export_export', text='', icon='EXPORT').asset_type_override = 'ANIMATIONS'
+            row.label (text='')
+            row.operator ('object.gyaz_export_export', text='', icon='EXPORT').asset_type_override='ANIMATIONS'
             row.operator ('object.gyaz_export_select_file_in_explorer', text='', icon='VIEWZOOM').path=context.scene.gyaz_export.path_to_last_export
             
    
@@ -1045,11 +1044,11 @@ class UI_GYAZGameRig (Panel):
     @classmethod
     def poll(cls, context):
         ao = bpy.context.active_object
-        if ao != None:      
+        if ao is not None:      
             return ao.type == 'ARMATURE' and "GYAZ_rig" in ao.data and 'GYAZ_rig_generated' in ao.data
     
     
-class UI_GYAZGameRigSnapAndKey (Panel):
+class BONE_PT_GYAZGameRigSnapAndKey (Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = 'bone'
@@ -1065,10 +1064,10 @@ class UI_GYAZGameRigSnapAndKey (Panel):
         
         row = lay.row (align=True)
         row.prop (rig, '["snap_start"]', text='')
-        row.operator (Op_GYAZGameRig_SetSnapPropToCurrentFrame.bl_idname, text='', icon='EYEDROPPER').prop_name = 'snap_start'
+        row.operator (Op_GYAZGameRig_SetSnapPropToCurrentFrame.bl_idname, text='', icon='EYEDROPPER').prop_name='snap_start'
         row.separator ()
         row.prop (rig, '["snap_end"]', text='')
-        row.operator (Op_GYAZGameRig_SetSnapPropToCurrentFrame.bl_idname, text='', icon='EYEDROPPER').prop_name = 'snap_end'
+        row.operator (Op_GYAZGameRig_SetSnapPropToCurrentFrame.bl_idname, text='', icon='EYEDROPPER').prop_name='snap_end'
         
         col = lay.column (align=True)
         if 'snappable_modules' in rig_data:
@@ -1076,24 +1075,24 @@ class UI_GYAZGameRigSnapAndKey (Panel):
                 if pbones.get ('module_props__'+module) != None:
                     row = col.row ()
                     icon = "CHECKBOX_DEHLT" if pbones['module_props__'+module]["snap_n_key__should_snap"] == 0 else "CHECKBOX_HLT"
-                    row.operator (Op_GYAZGameRig_SetSnapPropActive.bl_idname, text=module+':', icon=icon, emboss=False).module = module
+                    row.operator (Op_GYAZGameRig_SetSnapPropActive.bl_idname, text=module+':', icon=icon, emboss=False).module=module
                     pbone = pbones['module_props__'+module]
                     fk_ik = 'snap_n_key__fk_ik'
                     if fk_ik in pbone:
                         icon = 'snap_fk' if pbone[fk_ik] == 0 else 'snap_ik'
                         text = 'FK to IK' if pbone[fk_ik] == 0 else 'IK to FK'
-                        row.operator (Op_GYAZGameRig_SetSnapPropFKIK.bl_idname, text=text, icon_value = custom_icons[icon].icon_id, emboss=False).module = module
+                        row.operator (Op_GYAZGameRig_SetSnapPropFKIK.bl_idname, text=text, icon_value=custom_icons[icon].icon_id, emboss=False).module=module
                     else:
-                        row.operator (Op_GYAZGameRig_Button.bl_idname, icon_value = custom_icons['snap_fk'].icon_id, text='FK to CTRL', emboss=False)
+                        row.operator (Op_GYAZGameRig_Button.bl_idname, icon_value=custom_icons['snap_fk'].icon_id, text='FK to CTRL', emboss=False)
                     
-        lay.operator (Op_GYAZGameRig_SnapAndKey.bl_idname, text='Snap and Key', icon_value = custom_icons["snow"].icon_id)            
+        lay.operator (Op_GYAZGameRig_SnapAndKey.bl_idname, text='Snap and Key', icon_value=custom_icons["snow"].icon_id)            
 
    
     # when the buttons should show up    
     @classmethod
     def poll(cls, context):
         ao = bpy.context.active_object
-        if ao != None:      
+        if ao is not None:      
             return ao.type == 'ARMATURE' and "GYAZ_rig" in ao.data and 'GYAZ_rig_generated' in ao.data
 
 
@@ -1133,9 +1132,9 @@ def register():
     bpy.utils.register_class (Op_GYAZGameRig_SavePropsToAction)         
     bpy.utils.register_class (Op_GYAZGameRig_ResetProps)         
     bpy.utils.register_class (Op_GYAZGameRig_Button)         
-    bpy.utils.register_class (UI_GYAZGameRig)      
-    bpy.utils.register_class (UI_GYAZGameRigSnapAndKey)  
-    bpy.types.INFO_MT_armature_add.append(add_source_rig_button)      
+    bpy.utils.register_class (BONE_PT_GYAZGameRig)      
+    bpy.utils.register_class (BONE_PT_GYAZGameRigSnapAndKey)  
+    bpy.types.VIEW3D_MT_armature_add.append(add_source_rig_button)      
 
 def unregister ():
     
@@ -1160,9 +1159,9 @@ def unregister ():
     bpy.utils.unregister_class (Op_GYAZGameRig_SavePropsToAction)
     bpy.utils.unregister_class (Op_GYAZGameRig_ResetProps)
     bpy.utils.unregister_class (Op_GYAZGameRig_Button)
-    bpy.utils.unregister_class (UI_GYAZGameRig)
-    bpy.utils.unregister_class (UI_GYAZGameRigSnapAndKey)
-    bpy.types.INFO_MT_armature_add.remove(add_source_rig_button)
+    bpy.utils.unregister_class (BONE_PT_GYAZGameRig)
+    bpy.utils.unregister_class (BONE_PT_GYAZGameRigSnapAndKey)
+    bpy.types.VIEW3D_MT_armature_add.remove(add_source_rig_button)
   
 if __name__ == "__main__":   
     register()

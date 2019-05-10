@@ -23,20 +23,109 @@
 import bpy
 from bpy.types import Panel, Operator, AddonPreferences
 from bpy.props import *
-from mathutils import Vector
+from mathutils import Matrix, Vector, Euler
 from math import sqrt, pi, radians
+from mathutils.bvhtree import BVHTree
 
-#popup
+
+def vis_point(loc):
+    v = bpy.data.objects.new('fwd', None)
+    v.empty_display_size = .2
+    v.location = loc
+    bpy.context.scene.collection.objects.link(v)
+
+
 def popup (lines, icon, title):
     def draw(self, context):
         for line in lines:
             self.layout.label(line)
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
     
-#report
+
 def report (self, item, error_or_info):
     self.report({error_or_info}, item)
+    
 
+def mean (A, B):
+    mp = ( A + B ) / 2
+    return mp
+
+
+def get_distance (A, B):
+    return sqrt(((B[0]-A[0])**2)+((B[1]-A[1])**2)+((B[2]-A[2])**2))
+
+
+def link_collection (collection_name, path):
+    # path to the blend
+    filepath = path
+    # link or append
+    link = True
+    
+    with bpy.data.libraries.load (filepath, link=link) as (data_from, data_to):
+        data_to.collections = [name for name in data_from.collections if name.endswith (collection_name)]
+                   
+
+def set_cursor_location (location):
+    bpy.context.scene.cursor.location = location
+
+def set_pivot_mode (mode):
+    bpy.context.scene.tool_settings.transform_pivot_point = mode
+    
+def set_transform_orientation (mode):
+    bpy.context.scene.transform_orientation_slots[0].type = mode
+    
+
+##############################################################
+# THESE WORK IN ARMATURE SSSEDIT MODE
+##############################################################
+
+def translate_ebone_local(ebone, vector):
+    
+    mat = ebone.matrix
+    mat.invert()
+
+    vec = Vector(vector) @ mat
+
+    ebone.head += vec
+    ebone.tail += vec   
+
+
+def bone_radius_check_points(ebone, num, dist):
+
+    mat = ebone.matrix
+    mat.invert()
+    
+    results = []
+     
+    for n in range(num):
+        v = Vector ((0, 0, dist))
+        rot_mat = Matrix.Rotation(radians((360 / num) * n), 4, 'Y') @ mat
+        v = v @ rot_mat
+        v += (ebone.head + ebone.tail) * 0.5
+        
+        results.append(v)
+
+    return results
+
+
+# angle: degrees, axis: 'X', 'Y', 'Z'
+def rotate_ebone_local(ebone, angle, axis):
+    
+    saved_roll = ebone.roll
+    saved_pos = ebone.head.copy()
+    
+    mat = ebone.matrix
+    eul = mat.to_euler()
+    eul.rotate_axis(axis, radians(angle))
+    mat = eul.to_matrix().to_4x4()
+    mat.translation = saved_pos[0], saved_pos[1], saved_pos[2]
+    ebone.matrix = mat
+    
+    ebone.roll = saved_roll
+
+
+##############################################################
+##############################################################
 
 class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
        
@@ -44,7 +133,7 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
     bl_label = "GYAZ Game Rigger: Generate Rig"
     bl_description = ""
     
-    generate__facial_rig = EnumProperty (
+    generate__facial_rig: EnumProperty (
     name='Facial Rig',
     items=(
         ('NONE', 'NONE', ''),
@@ -54,46 +143,46 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
         ),
     default='FULL')
 
-    generate__fingers = BoolProperty (default=True, name='Fingers')
+    generate__fingers: BoolProperty (default=True, name='Fingers')
     
-    generate__spring_belly = BoolProperty (default=True, name='Spring Belly')
+    generate__spring_belly: BoolProperty (default=True, name='Spring Belly')
     
-    generate__spring_bottom = BoolProperty (default=True, name='Spring Bottom')
+    generate__spring_bottom: BoolProperty (default=True, name='Spring Bottom')
     
-    generate__spring_chest = BoolProperty (default=True, name='Spring Chest')
+    generate__spring_chest: BoolProperty (default=True, name='Spring Chest')
     
-    generate__twist_upperarm_count = EnumProperty (name='Twist Upperarm', items=(('0', '0', ''), ('1', '1', ''), ('2', '2', ''), ('3', '3', '')), default='3')
+    generate__twist_upperarm_count: EnumProperty (name='Twist Upperarm', items=(('0', '0', ''), ('1', '1', ''), ('2', '2', ''), ('3', '3', '')), default='3')
         
-    generate__twist_forearm_count = EnumProperty (name='Twist Forearm', items=(('0', '0', ''), ('1', '1', ''), ('2', '2', ''), ('3', '3', '')), default='3')
+    generate__twist_forearm_count: EnumProperty (name='Twist Forearm', items=(('0', '0', ''), ('1', '1', ''), ('2', '2', ''), ('3', '3', '')), default='3')
         
-    generate__twist_thigh_count = EnumProperty (name='Twist Thigh', items=(('0', '0', ''), ('1', '1', ''), ('2', '2', ''), ('3', '3', '')), default='3')
+    generate__twist_thigh_count: EnumProperty (name='Twist Thigh', items=(('0', '0', ''), ('1', '1', ''), ('2', '2', ''), ('3', '3', '')), default='3')
         
-    generate__twist_shin_count = EnumProperty (name='Twist Shin', items=(('0', '0', ''), ('1', '1', ''), ('2', '2', ''), ('3', '3', '')), default='1')    
+    generate__twist_shin_count: EnumProperty (name='Twist Shin', items=(('0', '0', ''), ('1', '1', ''), ('2', '2', ''), ('3', '3', '')), default='1')    
         
-    generate__twist_neck = BoolProperty (default=True, name='Twist Neck')
+    generate__twist_neck: BoolProperty (default=True, name='Twist Neck')
     
     def draw (self, context):
         lay = self.layout
         lay.prop (self, 'generate__fingers')
-        lay.label ('Twist Bones:')
+        lay.label (text='Twist Bones:')
         row = lay.row (align=True)
-        row.label ('Upperarm:')
+        row.label (text='Upperarm:')
         row.prop (self, 'generate__twist_upperarm_count', expand=True)
         row = lay.row (align=True)
-        row.label ('Forearm:')
+        row.label (text='Forearm:')
         row.prop (self, 'generate__twist_forearm_count', expand=True)
         row = lay.row (align=True)
-        row.label ('Thigh:')
+        row.label (text='Thigh:')
         row.prop (self, 'generate__twist_thigh_count', expand=True)
         row = lay.row (align=True)
-        row.label ('Shin:')
+        row.label (text='Shin:')
         row.prop (self, 'generate__twist_shin_count', expand=True)
         lay.prop (self, 'generate__twist_neck')
-        lay.label ('Spring Bones:')
+        lay.label (text='Spring Bones:')
         lay.prop (self, 'generate__spring_belly')
         lay.prop (self, 'generate__spring_bottom')
         lay.prop (self, 'generate__spring_chest')
-        lay.label ('Facial Rig:')
+        lay.label (text='Facial Rig:')
         lay.prop (self, 'generate__facial_rig', expand=True)
         lay.separator ()
     
@@ -289,79 +378,14 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
             #ik_hand_root_size = 0.45
 
             #END OF SETTINGS
-
-
+            
             ########################################################################################################
             ########################################################################################################
+
 
             scene = bpy.context.scene
             rig = bpy.context.object
 
-            def mean (A, B):
-                mp = ( A + B ) / 2
-                return mp
-
-            def get_distance (A, B):
-                return sqrt(((B[0]-A[0])**2)+((B[1]-A[1])**2)+((B[2]-A[2])**2))
-
-            def append (obj_name, path):
-
-                # path to the blend
-                filepath = path
-
-                # name of object(s) to append or link
-                obj_name = obj_name
-
-                # append, set to true to keep the link to the original file
-                link = True
-
-                # link
-                with bpy.data.libraries.load(filepath, link=link) as (data_from, data_to):
-                    data_to.objects = [name for name in data_from.objects if name==obj_name]
-
-                #link object to current scene
-                for obj in data_to.objects:
-                    if obj is not None:
-                       scene.objects.link(obj)
-
-                return obj
-
-            def append_group (obj_name, path):
-
-                # path to the blend
-                filepath = path
-
-                # append, set to true to keep the link to the original file
-                link = True
-
-                # link
-                with bpy.data.libraries.load(filepath, link=link) as (data_from, data_to):
-                    data_to.groups = [name for name in data_from.groups if name.endswith(obj_name)]
-
-
-            def area_of_type(type_name):
-                for area in bpy.context.screen.areas:
-                    if area.type == type_name:
-                        return area
-
-            def get_3d_view():
-                return area_of_type('VIEW_3D').spaces[0]                    
-
-            def set_cursor_location (location):
-                view3d = get_3d_view()
-                view3d.cursor_location = (location)
-
-            def set_pivot_mode (mode):
-                view3d = get_3d_view()
-                view3d.pivot_point=mode
-                
-            def set_transform_orientation (mode):
-                view3d = get_3d_view()
-                view3d.transform_orientation=mode
-
-
-            ########################################################################################################
-            ########################################################################################################
 
             def cast_ray_from_bone (start_bone, head_tail, ebone_pbone, direction, distance):        
                 #set ray start and direction
@@ -595,30 +619,21 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
                     bpy.ops.object.mode_set (mode='EDIT')
                     #duplicate source bone
                     twist_target_name = 'twist_target_'+source_bone
-                    tt_ebone = rig.data.edit_bones.new (name = twist_target_name)
+                    tt_ebone = rig.data.edit_bones.new (name=twist_target_name)
                     ebones = rig.data.edit_bones
                     tt_ebone.head = ebones [source_ebone.name].head
                     tt_ebone.tail = ebones [source_ebone.name].tail
                     tt_ebone.roll = ebones [source_ebone.name].roll
                     tt_ebone.parent = ebones [no_twist_name]
-                    #select twist target bone
-                    bpy.ops.object.mode_set (mode='POSE')
-                    bpy.ops.pose.select_all (action='DESELECT')
-                    bones = rig.data.bones
-                    bone = bones[twist_target_name]
-                    bone.select = True
-                    bones.active = bone
                     #translate twist target bone
                     bpy.ops.object.mode_set (mode='EDIT')
                     ebones = rig.data.edit_bones
-                    set_pivot_mode ('ACTIVE_ELEMENT')
-                    set_transform_orientation ('NORMAL')
                     
                     if source_bone_bend_axis == '-X':
-                        amount = twist_target_distance * (-1)
-                        constraint_axis = (False, False, True)
-      
-                    bpy.ops.transform.translate(value=(amount, amount, amount), constraint_axis=constraint_axis, constraint_orientation='NORMAL', mirror=False, proportional='DISABLED')
+                        amount = -twist_target_distance
+                        vector = 0, 0, amount
+                    
+                    translate_ebone_local (ebone=tt_ebone, vector=vector)
                     ebone = ebones [twist_target_name]
                     ebone.tail = ebone.head + Vector ((0, 0, general_bone_size))
                     bone_settings (name=twist_target_name, layer=twist_target_layer, group=twist_group, deform=False, lock_loc=False, lock_rot=True, lock_scale=True, type=None)
@@ -789,15 +804,11 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
                         bpy.ops.object.mode_set (mode='EDIT')
                         servant = 'target_servant_'+name
                         duplicate_bone (source_name=name, new_name=servant, parent_name=None, roll_override=False, length_override='HALF')
-                        bpy.ops.armature.select_all (action='DESELECT')
                         ebones = rig.data.edit_bones
                         ebone = ebones[servant]
-                        ebone.select = True
-                        ebone.select_head = True
-                        ebone.select_tail = True
                         ebone.roll = 0
                         ebone.parent = ebones[target_name]
-                        bpy.ops.transform.translate (value=(0, 0, chain_target_distance), constraint_axis=(False, False, True), constraint_orientation='NORMAL', mirror=False, proportional='DISABLED')
+                        translate_ebone_local (ebone=ebone, vector=(0, 0, chain_target_distance))
                         bone_settings (name=servant, layer=layer, group=None, deform=False, lock_loc=True, lock_rot=True, lock_scale=True, type=None)
                         servants.append (servant)
                     return servants
@@ -849,12 +860,12 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
 
             #APPEND BONE SHAPES
 
-            append_group ('GYAZ_game_rigger_widgets', source_path)
+            link_collection ('GYAZ_game_rigger_widgets', source_path)
 
             bpy.ops.object.mode_set (mode='OBJECT')
             bpy.ops.object.select_all (action='DESELECT')
-            rig.select = True
-            scene.objects.active = rig
+            rig.select_set (True)
+            bpy.context.view_layer.objects.active = rig
 
             shape_prefix = 'GYAZ_game_rigger_WIDGET__'
 
@@ -870,21 +881,19 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
             for mesh in rig.children:
                 if mesh.type == 'MESH':
                     mesh.hide_select = False
-                    mesh.select = True
-            scene.objects.active = rig.children [0]
+                    mesh.select_set (True)
+            bpy.context.view_layer.objects.active = rig.children [0]
             bpy.ops.object.duplicate_move ()
             bpy.ops.object.join ()
             bpy.ops.object.transform_apply (location=True, rotation=True, scale=True)
             
             merged_character_mesh = bpy.context.active_object
 
-            from mathutils.bvhtree import BVHTree
-
-            my_tree = BVHTree.FromObject(scene.objects[merged_character_mesh.name], scene)
+            my_tree = BVHTree.FromObject(scene.objects[merged_character_mesh.name], bpy.context.depsgraph)
 
             bpy.ops.object.select_all (action='DESELECT')
-            rig.select = True
-            scene.objects.active = rig
+            rig.select_set (True)
+            bpy.context.view_layer.objects.active = rig
 
 
             #BONE SHAPE FUNCTION
@@ -894,44 +903,21 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
                 #duplicate bone
                 bpy.ops.object.mode_set (mode='EDIT')
                 source_ebone = rig.data.edit_bones[bone_name]
-                orient_ebone = rig.data.edit_bones.new (name='shape_check_pk3i'+bone_name)
-                orient_ebone.head = source_ebone.head
-                orient_ebone.tail = source_ebone.tail
-                orient_ebone.roll = source_ebone.roll
-                orient_bone = orient_ebone.name
                 
-                bpy.ops.object.mode_set (mode='POSE')
-                
-                #select orient bone
-                bpy.ops.pose.select_all (action='DESELECT')
-                rig.data.bones[orient_bone].select = True
-                rig.data.bones.active = rig.data.bones[orient_bone]
+                distance = 100
+                start = (source_ebone.head + source_ebone.tail) * .5
                 
                 hit_distances = []
-                set_pivot_mode ('ACTIVE_ELEMENT')
-                for n in range (1, number_of_checks+1):
-                    #set orientation
-                    bpy.ops.pose.rot_clear ()
-                    bpy.ops.transform.rotate(value=radians((360/number_of_checks)*n), axis=(0, 1, 0), constraint_axis=(False, True, False), constraint_orientation='GIMBAL')
-                    if keep_rotation == False:
-                        bpy.ops.transform.rotate(value=radians(90), axis=(0, 0, 1), constraint_axis=(False, False, True), constraint_orientation='GIMBAL')
-                    start_bone = orient_bone
-                    head_tail = 'head'
-                    ebone_pbone = 'pbone'
-                    pbone = rig.pose.bones[orient_bone]
-                    direction = pbone.tail - pbone.head
-                    distance = 100
-                    
+                check_points = bone_radius_check_points(ebone=source_ebone, num=number_of_checks, dist=distance)
+                
+                for check_point in check_points:
                     #cast ray
-                    hit_loc, hit_nor, hit_index, hit_dist = cast_ray_from_bone (start_bone, head_tail, ebone_pbone, direction, distance)
+                    hit_loc, hit_nor, hit_index, hit_dist = my_tree.ray_cast (start, check_point - start, distance)
                     
-                    if hit_dist != None:
+                    if hit_dist is not None:
                         hit_distances.append (hit_dist)
                     else:
                         hit_distances.append (0.5)
-
-                bpy.ops.object.mode_set (mode='EDIT')
-                rig.data.edit_bones.remove (rig.data.edit_bones[orient_bone])
                 
                 longest_hit_distance = max (hit_distances)
                 
@@ -998,35 +984,28 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
                     ebone.parent = ebones[bone_name]
                     ebone_name = ebone.name
                     
-                    set_cursor_location (location=ebone.head)
-                    set_pivot_mode (mode='ACTIVE_ELEMENT')  
-                    set_transform_orientation (mode='NORMAL')
-                    
-                    bpy.ops.armature.select_all (action='DESELECT')
-                    ebone.select = True
-                    ebone.select_tail = True
-                    ebone.select_head = True
-                    ebones.active = ebone
-                    
                     if shape_bone == '-X':
-                        sign = 1
-                        constraints = (False, False, True)
+                        v1 = 0, 0, 1
+                        v2 = 0, 0, -1
+                        v3 = 0, 0, pole_target_distance
                     elif shape_bone == '-Z':
-                        sign = 1
-                        constraints = (True, False, False)
+                        v1 = 1, 0, 0
+                        v2 = -1, 0, 0
+                        v3 = 0, 0, -pole_target_distance
                     elif shape_bone == 'Z':
-                        sign = -1
-                        constraints = (True, False, False)        
+                        v1 = -1, 0, 0
+                        v2 = 1, 0, 0
+                        v3 = pole_target_distance, 0, 0
                     
-                    bpy.ops.transform.translate (value=(1*sign, 1*sign, 1*sign), constraint_axis=constraints, constraint_orientation='NORMAL', mirror=False, proportional='DISABLED')
+                    translate_ebone_local (ebone=ebone, vector=v1)
                     
                     hit_loc, hit_nor, hit_index, hit_dist = cast_ray_from_bone (start_bone=bone_name, head_tail='head', ebone_pbone='ebone', direction=ebone.head, distance=10)
                     
-                    bpy.ops.transform.translate (value=(-1*sign, -1*sign, -1*sign), constraint_axis=constraints, constraint_orientation='NORMAL', mirror=False, proportional='DISABLED')
+                    translate_ebone_local (ebone=ebone, vector=v2)
                     
-                    if hit_dist != None:
-                        bpy.ops.transform.translate (value=(hit_dist*sign, hit_dist*sign, hit_dist*sign), constraint_axis=constraints, constraint_orientation='NORMAL', mirror=False, proportional='DISABLED')        
-                    
+                    if hit_dist != None:        
+                        translate_ebone_local (ebone=ebone, vector=v3)
+                        
                     set_bone_only_layer (shape_bone_name, 30)
                     set_bone_deform (shape_bone_name, False)
                     
@@ -1292,23 +1271,16 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
                 ebones = rig.data.edit_bones
                 
                 set_cursor_location (location=ebones[b2].head)
-                set_pivot_mode (mode='ACTIVE_ELEMENT')  
-                set_transform_orientation (mode='NORMAL')
                 
                 pole_bone = 'pole_pos_'+b2
                 duplicate_bone (source_name=b2, new_name=pole_bone, parent_name=None, roll_override=False, length_override=None)
                 
-                bpy.ops.armature.select_all (action='DESELECT')
-                ebones[pole_bone].select_head = True
-                ebones[pole_bone].select_tail = True
-                ebones[pole_bone].select = True
-                
                 if b2_bend_axis == 'X':
-                    sign = -1
+                    v = 0, 0, -pole_target_distance
                 elif b2_bend_axis == '-X':
-                    sign = 1
+                    v = 0, 0, pole_target_distance
                     
-                bpy.ops.transform.translate (value=(pole_target_distance*sign, pole_target_distance*sign, pole_target_distance*sign), constraint_axis=(False, False, True), constraint_orientation='NORMAL', mirror=False, proportional='DISABLED')
+                translate_ebone_local (ebone=ebones[pole_bone], vector=v)
                 
                 pole_pos = ebones[pole_bone].head
                 rig.data['temp'] = pole_pos
@@ -1497,9 +1469,9 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
                 bpy.ops.object.mode_set (mode='EDIT')
                 ebones = rig.data.edit_bones
 
-            #    pole_pos = calculate_pole_target_location (b1, b2, b3, pole_target_distance)
+                #pole_pos = calculate_pole_target_location (b1, b2, b3, pole_target_distance)
                 pole_pos = calculate_pole_target_location_2 (b1, b2, b3, pole_target_distance, b2_bend_axis=b2_bend_axis)
-
+                
                 #create pole_target
                 pole_target = 'target_' + pole_target_name
                 ebone = ebones.new (name=pole_target)
@@ -1776,14 +1748,14 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
                     rig.data.layers[n] = True
                     
                 #visualization
-                rig.draw_type = 'WIRE'
-                rig.data.draw_type = 'OCTAHEDRAL'
+                rig.display_type = 'WIRE'
+                rig.data.display_type = 'OCTAHEDRAL'
                 
                 rig.data.show_names = False
                 rig.data.show_axes = False
                 rig.data.show_bone_custom_shapes = True
                 rig.data.show_group_colors = True
-                rig.show_x_ray = False
+                rig.show_in_front = False
                 rig.data.use_deform_delay = False
                 
                 create_mudule_prop_bone ('general')
@@ -1846,10 +1818,10 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
                 for n in hidden_layers:
                     rig.data.layers[n] = False
                     
-                scene.objects.unlink (merged_character_mesh)
+                merged_character_mesh.user_clear ()
                 bpy.data.objects.remove (merged_character_mesh)
                     
-                rig.show_x_ray = False
+                rig.show_in_front = False
                 
                 bpy.ops.object.mode_set (mode='POSE')
 
@@ -2996,24 +2968,17 @@ class Op_GYAZ_GameRig_GenerateRig (bpy.types.Operator):
                     ebone.tail = ebones[source_bone].tail
                     ebone.roll = ebones[source_bone].roll
                     ebone.parent = ebones[source_bone].parent
-                    #make active
-                    bpy.ops.object.mode_set (mode='POSE')
-                    bpy.ops.pose.select_all (action='DESELECT')
-                    bone = rig.data.bones[bottom_raw]
-                    bone.select = True
-                    rig.data.bones.active = bone
                     #rotate it 
                     bpy.ops.object.mode_set (mode='EDIT')
                     ebones = rig.data.edit_bones
                     ebone = ebones[bottom_raw]
                     
-                    set_cursor_location (ebone.head)
-                    set_transform_orientation ('NORMAL')   
-                    set_pivot_mode ('CURSOR')
+                    if bend_axis == '-X':
+                        angle = radians(-90)
+                        axis = 'X'
                     
-                    if bend_axis == '-X':    
-                        bpy.ops.transform.rotate(value=radians (-90), axis=(1, 0, 0), constraint_axis=(True, False, False), constraint_orientation='NORMAL')
-                    
+                    rotate_ebone_local (ebone=ebone, angle=angle, axis=axis)
+                        
                     #set ray start and direction   
                     ray_start = ebones[source_bone].head
                     ray_direction = ebones[bottom_raw].tail - ray_start
