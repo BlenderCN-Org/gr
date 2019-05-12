@@ -1,11 +1,32 @@
-import bpy
+# ##### BEGIN GPL LICENSE BLOCK #####
+#
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any laTter version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software Foundation,
+#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+#
+# ##### END GPL LICENSE BLOCK #####
+
+
+##########################################################################################################
+##########################################################################################################
+
+import bpy, os
 from mathutils.bvhtree import BVHTree
 
 
-class Globals():
+class Constants():
         
-    auto_bone_shape_scale_offset = 0.05
-    auto_bone_shape_scale_offset_limb = 0.02
+    bone_shape_scale_multiplier = 1.2
     target_shape_size = 0.05
     general_bone_size = 0.05
     pole_target_distance = 0.5
@@ -15,6 +36,7 @@ class Globals():
     look_target_offset = 0.5
     chest_target_distance = 1
     chest_target_size = 0.25
+    fallback_shape_size = 0.1
 
     source_path = os.path.dirname(__file__) + "/source_shapes.blend"
 
@@ -31,28 +53,28 @@ class Globals():
     twist_target_distance = -0.4
 
     # upperarm
-    upperarm_twists = [
+    upperarm_twist_influences = [
         [0.75],
         [0.75, 0.5],
         [0.75, 0.5, 0.25]
     ]
 
     # forearm
-    forearm_twists = [
+    forearm_twist_influences = [
         [1],
         [1, 0.5],
         [1, 0.5, 0.25]
     ]
 
     # thigh
-    thigh_twists = [
+    thigh_twist_influences = [
         [0.75],
         [0.75, 0.5],
         [0.75, 0.5, 0.25]
     ]
 
     # shin
-    shin_twists = [
+    shin_twist_influences = [
         [0.75],
         [1, 0.5],
         [1, 0.5, 0.25]
@@ -130,6 +152,7 @@ class Globals():
     touch_layer = 10
 
     target_layer = 11
+    source_layer = 23
 
     # GROUPS
     base_group = 'base'
@@ -142,3 +165,23 @@ class Globals():
     ik_prop_group = 'ik_prop'
     face_group = 'face'
     target_group = 'target'
+    
+    # GROUP COLORS
+    base_group_color_set = 'THEME04'
+    fk_group_color_set = 'THEME06'
+    central_ik_group_color_set = 'THEME10'
+    left_ik_group_color_set = 'THEME01'
+    right_ik_group_color_set = 'THEME03'
+    twist_group_color_set = 'THEME07'
+    spring_group_color_set = 'THEME14'
+    ik_prop_group_color_set = 'THEME10'
+    face_group_color_set = 'THEME08'
+    target_group_color_set = 'THEME09'
+    
+    # BONE TYPES
+    base_type = 'base'
+    fk_type = 'fk'
+    twist_type = 'twist'
+    ik_type = 'ik'
+    ik_prop_type = 'ik_prop'
+    ctrl_type = 'ctrl'
