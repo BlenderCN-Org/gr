@@ -50,7 +50,7 @@ class Constants():
     neck_twist_min_y = -20
     neck_twist_track_to_head = 1
 
-    twist_target_distance = -0.4
+    twist_target_distance = 0.5
 
     # upperarm
     upperarm_twist_influences = [

@@ -28,6 +28,7 @@ from .utils import create_module_prop_bone
 from .utils import bone_settings
 from .utils import link_collection
 from .utils import prop_to_drive_layer
+from .utils import duplicate_bone
 from .constants import Constants
 
 
@@ -311,9 +312,8 @@ def root_bone(shape_collection):
                   layer_index=Constants.root_layer, 
                   lock_scale=True,  
                   bone_shape_name='master', 
-                  bone_shape_pos='HEAD', 
-                  bone_shape_manual_scale=1, 
-                  bone_shape_up=True
+                  bone_shape_pos='HEAD',
+                  bone_shape_manual_scale=1
                   )
 
     name = 'root_extract'
@@ -331,18 +331,19 @@ def root_bone(shape_collection):
                   )
 
 
-def ik_prop_bone(name, source_bone_name, parent_name, shape_collection):
+def ik_prop_bone(bvh_tree, shape_collection, name, source_bone_name, parent_name):
     
     duplicate_bone(source_name=source_bone_name, 
                    new_name=name, 
                    parent_name=parent_name
                    )
-    bone_settings(shape_collection=shape_collection, 
+    bone_settings(bvh_tree=bvh_tree,
+                  shape_collection=shape_collection, 
                   bone_name=name, 
                   layer_index=Constants.ik_prop_layer, 
                   group_name=Constants.ik_prop_group, 
                   lock_scale=True,  
                   bone_shape_name='cube_outer', 
-                  bone_shape_pos='MIDDLE',
+                  bone_shape_pos='HEAD',
                   bone_type=Constants.ik_prop_type
                   )

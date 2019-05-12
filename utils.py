@@ -263,7 +263,7 @@ def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_inde
                                                                           )
                 if hit_dist is not None:
                     hit_distances.append(hit_dist)
-                    
+            
             final_shape_scale = max(hit_distances) * Constants.bone_shape_scale_multiplier if len(hit_distances) > 0 else fallback_shape_size
             
         else:
@@ -629,6 +629,7 @@ def set_module_on_relevant_bones(relevant_bone_names, module):
 
 # for registering modules for the 'Snap&Key' operator
 def snappable_module(module):
+    rig = bpy.context.object
     if 'snappable_modules' not in rig.data:
         rig.data['snappable_modules'] = []
     list = [item for item in rig.data['snappable_modules']]
@@ -759,6 +760,7 @@ def create_twist_bones(bvh_tree, shape_collection, source_bone_name, count, uppe
         translate_bone_local(name=twist_target_name, 
                              vector=vector
                              )
+        ebones = rig.data.edit_bones
         ebone = ebones[twist_target_name]
         ebone.tail = ebone.head + Vector((0, 0, Constants.general_bone_size))
         
@@ -792,9 +794,11 @@ def create_twist_bones(bvh_tree, shape_collection, source_bone_name, count, uppe
                       lock_loc=True,
                       lock_rot=True, 
                       lock_scale=True,
+                      hide_select=True,
                       bone_shape_name='line',
                       bone_shape_pos='HEAD',
-                      bone_shape_manual_scale=1
+                      bone_shape_manual_scale=1,
+                      bone_shape_dynamic_size=True
                       )
 
     elif upper_or_lower_limb == 'LOWER':
@@ -1415,17 +1419,17 @@ def isolate_rotation(module, parent_bone_name, first_bone_name):
                   lock_scale=True
                   )
 
-    # bone that becomes the parent of 'first_bone'
+    # bone that becomes the parent of 'first_bone_name'
     bpy.ops.object.mode_set(mode='EDIT')
     ebones = rig.data.edit_bones
-    second_intermeidate_bone_name = 'isolate_rot_' + first_bone + '_child'
-    ebone = ebones.new(name=second_intermeidate_bone_name)
+    second_intermediate_bone_name = 'isolate_rot_' + first_bone_name + '_child'
+    ebone = ebones.new(name=second_intermediate_bone_name)
     ebone.head = ebones[first_bone_name].head
     ebone.tail = ebone.head + Vector((0, 0, Constants.general_bone_size))
     ebones = rig.data.edit_bones
     ebone.parent = ebones['root_extract']
 
-    bone_settings(bone_name=second_intermeidate_bone_name, 
+    bone_settings(bone_name=second_intermediate_bone_name, 
                   layer_index=Constants.fk_extra_layer, 
                   lock_loc=True, 
                   lock_scale=True
@@ -1434,12 +1438,12 @@ def isolate_rotation(module, parent_bone_name, first_bone_name):
     # parent first bone to this bone
     bpy.ops.object.mode_set(mode='EDIT')
     ebones = rig.data.edit_bones
-    ebones[first_bone_name].parent = ebones[second_intermeidate_bone_name]
+    ebones[first_bone_name].parent = ebones[second_intermediate_bone_name]
 
     # constraint second itermediate bone to the first one
     bpy.ops.object.mode_set(mode='POSE')
     pbones = rig.pose.bones
-    cs = pbones[second_intermeidate_bone_name].constraints
+    cs = pbones[second_intermediate_bone_name].constraints
 
     c = cs.new('COPY_LOCATION')
     c.target = rig
@@ -1455,9 +1459,9 @@ def isolate_rotation(module, parent_bone_name, first_bone_name):
     c.subtarget = first_intermeidate_bone_name
 
     prop_to_drive_constraint(prop_bone_name=first_bone_name, 
-                             bone_name=second_intermeidate_bone_name,
+                             bone_name=second_intermediate_bone_name,
                              constraint_name='isolate_rot_1', 
-                             prop_name='fixate_' + first_bone,
+                             prop_name='fixate_' + first_bone_name,
                              attribute='influence', 
                              prop_min=0.0, 
                              prop_max=1.0, 

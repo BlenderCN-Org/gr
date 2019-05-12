@@ -25,10 +25,13 @@ from bpy.types import Operator, AddonPreferences
 from bpy.props import *
 from mathutils import Vector
 
+from .constants import Constants
 from .m_base import prepare
 from .m_base import finalize
 from .m_base import root_bone
+from .m_base import ik_prop_bone
 from .m_biped_torso import biped_torso
+from .m_biped_arm import biped_arm
 
 
 class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
@@ -148,13 +151,31 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
             biped_torso(bvh_tree,
                         shape_collection,
                         module='spine', 
-                        chain=['hips', 'spine_1', 'spine_2', 'spine_3'], 
+                        chain=('hips', 'spine_1', 'spine_2', 'spine_3'), 
                         first_parent_name='root_extract'
                         )
-            
+            ik_prop_bone(bvh_tree,
+                         shape_collection,
+                         name='ik_hand_prop', 
+                         source_bone_name='hand_r', 
+                         parent_name='root_extract'
+                         )
+            for side in Constants.sides:
+                biped_arm(bvh_tree, 
+                          shape_collection, 
+                          module='arm' + side, 
+                          chain=('shoulder' + side, 'upperarm' + side, 'forearm' + side, 'hand' + side), 
+                          first_parent_name='spine_3', 
+                          pole_target_name='elbow' + side, 
+                          forearm_bend_back_limit=30, 
+                          ik_hand_parent_name='ik_hand_prop', 
+                          pole_target_parent_name='root_extract',
+                          side=side,
+                          upperarm_twist_count=generate__twist_upperarm_count, 
+                          forearm_twist_count=generate__twist_forearm_count
+                          )
+                
             finalize(merged_character_mesh=merged_character_mesh)
-            
-            
             
 
 
