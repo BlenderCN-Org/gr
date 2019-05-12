@@ -7,7 +7,7 @@ from math import radians
 
 class Constants():
         
-    bone_shape_scale_multiplier = 1.1
+    bone_shape_scale_offset = 0.01
     target_shape_size = 0.05
     general_bone_size = 0.05
     pole_target_distance = 0.5
@@ -145,7 +145,13 @@ class Constants():
     ik_prop_group = 'ik_prop'
     face_group = 'face'
     target_group = 'target'
-
+    
+    # BONE TYPES
+    base_type = 'base'
+    fk_type = 'fk'
+    twist_type = 'twist'
+    ik_type = 'ik'
+    
 
 def vis_point(loc):
     v = bpy.data.objects.new('fwd', None)
@@ -250,7 +256,7 @@ def create_leaf_bone(bone_name, source_bone_name, start_middle=False, parent_nam
 
 # bone_shape_pos: 'HEAD', 'MIDDLE', 'TAIL'
 # lock_loc... expects bool or container of 3 bools
-def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_index=0, group_name='', use_deform=False, lock_loc=False, lock_rot=False, lock_scale=False, hide_select=False, bone_shape_name='', bone_shape_pos='MIDDLE', bone_shape_manual_scale=None, bone_type=''):
+def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_index=0, group_name='', use_deform=False, lock_loc=False, lock_rot=False, lock_scale=False, hide_select=False, bone_shape_name='', bone_shape_pos='MIDDLE', bone_shape_manual_scale=None, bone_shape_up=False, bone_shape_dynamic_size=False, bone_type=''):
     
     rig = bpy.context.object
     
@@ -337,8 +343,15 @@ def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_inde
             # get check points around bone
             number_of_checks = 4
             
-            mat = source_ebone.matrix
-            mat.invert()
+            if bone_shape_up:
+                mat = Matrix(((1.0, 0.0, 0.0, 0.3396),
+                             (0.0, 0.0, -1.0, 0.4289),
+                             (0.0, 1.0, 0.0, 0.1819),
+                             (0.0, 0.0, 0.0, 1.0)))
+                mat.invert()
+            else:
+                mat = source_ebone.matrix
+                mat.invert()
 
             check_points = []
 
@@ -347,18 +360,20 @@ def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_inde
                 rot_mat = Matrix.Rotation(radians((360 / number_of_checks) * n), 4, 'Y') @ mat
                 v = v @ rot_mat
                 v += ray_start
-
+                
                 check_points.append(v)
             
             # cast rays -> look for geo
             hit_distances = []
             for p in check_points:
-                hit_loc, hit_nor, hit_index, hit_dist = bvh_tree.ray_cast(ray_start, p - ray_start, 10)
-                
+                hit_loc, hit_nor, hit_index, hit_dist = bvh_tree.ray_cast(ray_start, 
+                                                                          p - ray_start, 
+                                                                          10
+                                                                          )
                 if hit_dist is not None:
                     hit_distances.append(hit_dist)
                     
-            final_shape_scale = max(hit_distances) * Constants.bone_shape_scale_multiplier if len(hit_distances) > 0 else fallback_shape_size
+            final_shape_scale = max(hit_distances) + Constants.bone_shape_scale_offset if len(hit_distances) > 0 else fallback_shape_size
             
         else:
             final_shape_scale = bone_shape_manual_scale
@@ -369,18 +384,32 @@ def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_inde
         
         wgt = shape_collection.objects['GYAZ_game_rigger_WIDGET__' + bone_shape_name]
         pbone.custom_shape = wgt
-        pbone.use_custom_shape_bone_size = False
+        pbone.use_custom_shape_bone_size = bone_shape_dynamic_size
         
-        if bone_shape_pos != 'HEAD':
-            # create shape bone
-            create_leaf_bone(bone_name='shape_' + bone_name, 
-                             source_bone_name=bone_name, 
-                             start_middle=bone_shape_pos == 'MIDDLE'
-                             )
+        shape_bone_name = 'shape_' + bone_name
+        
+        if not bone_shape_up:
+            if bone_shape_pos != 'HEAD':
+                # create shape bone
+                create_leaf_bone(bone_name=shape_bone_name,
+                                 source_bone_name=bone_name, 
+                                 start_middle=bone_shape_pos == 'MIDDLE'
+                                 )   
+        else:
+            # create shape bone pointing straight up
+            bpy.ops.object.mode_set(mode='EDIT')
+            ebone = rig.data.edit_bones.new(shape_bone_name)
+            ebones = rig.data.edit_bones
+            ebone.head = ebones[bone_name].head
+            ebone.tail = ebones[bone_name].head + Vector((0, 0, Constants.general_bone_size))
+            ebone.roll = 0
+            ebone.parent = ebones[bone_name]
+            
+        if 'shape_' + bone_name in rig.data.edit_bones:
             # use shape bone as transform of shape
             bpy.ops.object.mode_set(mode='POSE')
             pbones = rig.pose.bones
-            shape_pbone = pbones['shape_' + bone_name]
+            shape_pbone = pbones[shape_bone_name]
             pbone.custom_shape_transform = shape_pbone
             # shape bone settings:
             bone = rig.data.bones['shape_' + bone_name]
@@ -407,7 +436,7 @@ def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_inde
 
 
 # parent_name: bone name or 'SOURCE_PARENT'
-def duplicate_bone(source_name, new_name, parent_name, half_long=False):
+def duplicate_bone(source_name, new_name, parent_name='', half_long=False):
     if bpy.context.mode != 'ARMATURE_EDIT':
         bpy.ops.object.mode_set(mode='EDIT')
     rig = bpy.context.object
@@ -460,12 +489,8 @@ def create_no_twist_bone(source_bone_name):
     c.head_tail = 1
     bone_settings(bone_name=no_twist_name, 
                   layer_index=Constants.misc_layer, 
-                  group_name='', 
-                  use_deform=False, 
                   lock_loc=True, 
-                  lock_rot=False, 
-                  lock_scale=True, 
-                  bone_type=None
+                  lock_scale=True
                   )
     
     return no_twist_name
@@ -596,6 +621,67 @@ def prop_to_drive_pbone_attribute_with_array_index(prop_bone_name, bone_name, pr
     t.id = rig
     t.data_path = 'pose.bones["' + prop_bone_name + '"]["' + prop_name + '"]'
     d.expression = expression
+
+
+def separate_relevant_bones(relevant_bone_names):
+    # separate relevant bones into fk and no-fk groups
+    bpy.ops.object.mode_set(mode='POSE')
+    pbones = bpy.context.object.pose.bones
+    fk_bones = []
+    non_fk_bones = []
+    touch_bones = []
+    for name in relevant_bone_names:
+        pbone = pbones[name]
+        if 'bone_type' in pbone:
+            if pbone['bone_type'] == 'fk':
+                fk_bones.append(name)
+            elif pbone['bone_type'] == 'ik' or pbone['bone_type'] == 'ctrl':
+                non_fk_bones.append(name)
+            elif pbone['bone_type'] == 'touch':
+                touch_bones.append(name)
+    return fk_bones, non_fk_bones, touch_bones
+
+
+# fk, ik visibility
+def bone_visibility(prop_bone_name, module, relevant_bone_names, ik_ctrl):
+    fk_bones, non_fk_bones, touch_bones = separate_relevant_bones(relevant_bone_names=relevant_bone_names)
+    for bone in fk_bones:
+        prop_to_drive_bone_attribute(prop_bone_name=prop_bone_name, 
+                                     bone_name=bone, 
+                                     bone_type='BONE',
+                                     prop_name='visible_fk_' + module, 
+                                     attribute='hide', prop_min=0,
+                                     prop_max=1, 
+                                     prop_default=1, 
+                                     description='', 
+                                     expression='1-v1'
+                                     )
+    if ik_ctrl != None:
+        for bone in non_fk_bones:
+            prop_to_drive_bone_attribute(prop_bone_name=prop_bone_name, 
+                                         bone_name=bone, 
+                                         bone_type='BONE',
+                                         prop_name='visible_' + ik_ctrl + '_' + module, 
+                                         attribute='hide',
+                                         prop_min=0, 
+                                         prop_max=1, 
+                                         prop_default=1, 
+                                         description='',
+                                         expression='1-v1'
+                                         )
+    if len(touch_bones) > 0:
+        for bone in touch_bones:
+            prop_to_drive_bone_attribute(prop_bone_name=prop_bone_name, 
+                                         bone_name=bone, 
+                                         bone_type='BONE',
+                                         prop_name='visible_touch_' + module, 
+                                         attribute='hide', 
+                                         prop_min=0,
+                                         prop_max=1, 
+                                         prop_default=1, 
+                                         description='', 
+                                         expression='1-v1'
+                                         )
     
 
 def create_mudule_prop_bone(module):
@@ -646,8 +732,8 @@ def get_pole_angle(base_bone_name, ik_bone_name, pole_bone_name):
     ebones = bpy.context.object.data.edit_bones
     
     base_bone = ebones[base_bone_name]
-    base_bone = ebones[ik_bone_name]
-    base_bone = ebones[pole_bone_name]
+    ik_bone = ebones[ik_bone_name]
+    pole_bone = ebones[pole_bone_name]
     
     pole_location = pole_bone.head
     pole_normal = (ik_bone.tail - base_bone.head).cross(pole_location - base_bone.head)
@@ -692,7 +778,7 @@ def calculate_pole_target_location_2(b1, b2, b3, pole_target_distance, b2_bend_a
     elif b2_bend_axis == '-X':
         v = 0, 0, pole_target_distance
 
-    translate_ebone_local (name=pole_bone, vector=v)
+    translate_bone_local(name=pole_bone, vector=v)
 
     pole_pos = ebones[pole_bone].head
     rig.data['temp'] = pole_pos
@@ -704,40 +790,36 @@ def calculate_pole_target_location_2(b1, b2, b3, pole_target_distance, b2_bend_a
 def get_ik_group_name(side):
     # set group
     if side == Constants.sides[0]:
-        ik_group = Constants.left_ik_group
+        ik_group_name = Constants.left_ik_group
     elif side == Constants.sides[1]:
-        ik_group = Constants.right_ik_group
+        ik_group_name = Constants.right_ik_group
     elif side == '_c':
-        ik_group = Constants.central_ik_group
-    return ik_group
+        ik_group_name = Constants.central_ik_group
+    return ik_group_name
 
 
 # upper_or_lower_limb: 'UPPER', 'LOWER'
+# end_affector_name is used if 
 def create_twist_bones(bvh_tree, shape_collection, source_bone_name, count, upper_or_lower_limb, twist_target_distance, end_affector_name, influences, is_thigh):
     
     source_bone_bend_axis = '-X'
-    twist_bones = []
     
     if bpy.context.mode != 'ARMATURE_EDIT':
         bpy.ops.object.mode_set(mode='EDIT')
     
     rig = bpy.context.object
-    ebones = rig.data.edit_bones
-    source_ebone = ebones[source_bone_name]
 
-    twist_bones = subdivide_bone (name=source_bone_name, 
-                                  number=3, 
-                                  number_to_keep=count, 
-                                  reverse_naming=True if upper_or_lower_limb == 'LOWER' else False, 
-                                  prefix='twist', 
-                                  parent_all_to_source=True,
-                                  delete_source=False
-                                  )
+    twist_bone_names = subdivide_bone (name=source_bone_name, 
+                                       number=3, 
+                                       number_to_keep=count, 
+                                       reverse_naming=True if upper_or_lower_limb == 'LOWER' else False, 
+                                       prefix='twist', 
+                                       parent_all_to_source=True,
+                                       delete_source=False
+                                       )
 
     # twist target bones
     if upper_or_lower_limb == 'UPPER':
-
-        # create no-twist bone if it does not exist already
         no_twist_name = create_no_twist_bone(source_bone_name=source_bone_name)
 
         # duplicate source bone
@@ -763,12 +845,10 @@ def create_twist_bones(bvh_tree, shape_collection, source_bone_name, count, uppe
                       layer_index=Constants.twist_target_layer, 
                       group_name=Constants.twist_group,
                       lock_rot=True,
-                      lock_rot=(True, False, True),
                       lock_scale=True,
                       bone_shape_name='twist_target',
                       bone_shape_pos='HEAD',
-                      bone_shape_manual_scale=Constants.target_shape_size,
-                      bone_type=''
+                      bone_shape_manual_scale=Constants.target_shape_size
                       )
 
         # twist target line
@@ -791,8 +871,7 @@ def create_twist_bones(bvh_tree, shape_collection, source_bone_name, count, uppe
                       lock_scale=True,
                       bone_shape_name='line',
                       bone_shape_pos='HEAD',
-                      bone_shape_manual_scale=1,
-                      bone_type=''
+                      bone_shape_manual_scale=1
                       )
 
     elif upper_or_lower_limb == 'LOWER':
@@ -830,11 +909,10 @@ def create_twist_bones(bvh_tree, shape_collection, source_bone_name, count, uppe
                           lock_scale=True, 
                           bone_shape_name='twist_target',
                           bone_shape_pos='HEAD',
-                          bone_shape_manual_scale=Constants.target_shape_size, 
-                          bone_type=''
+                          bone_shape_manual_scale=Constants.target_shape_size
                           )
     # bone settings
-    for name in twist_bones:
+    for name in twist_bone_names:
         bone_settings(bvh_tree=bvh_tree, 
                       shape_collection=shape_collection, 
                       bone_name=name, 
@@ -844,7 +922,7 @@ def create_twist_bones(bvh_tree, shape_collection, source_bone_name, count, uppe
                       lock_loc=True,
                       lock_rot=(True, False, True),
                       lock_scale=True,
-                      bone_type='twist'
+                      bone_type=Constants.twist_type
                       )
     
     # CONSTRAINTS
@@ -934,50 +1012,454 @@ def create_twist_bones(bvh_tree, shape_collection, source_bone_name, count, uppe
         c.target_space = 'LOCAL'
         c.owner_space = 'LOCAL'
         c.influence = 1
+        
+        
+def three_bone_limb(bvh_tree, shape_collection, module, b1, b2, b3, pole_target_name, parent_pole_target_to_ik_target, b2_bend_axis, b2_bend_back_limit, first_parent_name, ik_b3_parent_name, pole_target_parent_name, b3_shape_up, side):
+    
+    rig = bpy.context.object
+    
+    fk_prefix = Constants.fk_prefix
+    ik_prefix = Constants.ik_prefix
+    ik_group = get_ik_group_name(side=side)
+    
+    limit_ik_b2 = True
+    b2_bend_axis = b2_bend_axis
+    b2_max_bend_bwrd = b2_bend_back_limit
+    limit_fk_b2 = False
+    inable_stretch = False
+    module_prop_layer = 30
+
+    bone_names = (b1, b2, b3)
+
+    # bones that should be used for animation
+    relevant_bone_names = []
+
+    # for module properties
+    prop_bone_name = create_mudule_prop_bone(module=module)
+
+    # AXIS LOCKS
+    if b2_bend_axis == 'X' or '-X':
+        axis_locks_string = ['y', 'z']
+        axis_locks_int = [1, 2]
+
+    # _____________________________________________________________________________________________________
+
+    # LOW-LEVEL RIG
+    for name in bone_names:
+        bone_settings(bone_name=name, 
+                      layer_index=Constants.base_layer, 
+                      group_name=Constants.base_group, 
+                      use_deform=True, 
+                      lock_loc=True,  
+                      lock_scale=True, 
+                      bone_type=Constants.base_type
+                      )
+        relevant_bone_names.append(name)
+
+    # _____________________________________________________________________________________________________
+
+    # FK
+    for index, name in enumerate(bone_names):
+        if index == 0:
+            parent_name = first_parent_name
+        else:
+            parent_name = fk_prefix + bone_names[index - 1]
+        
+        full_name = fk_prefix + name
+        
+        duplicate_bone(source_name=name, 
+                       new_name=full_name, 
+                       parent_name=parent_name
+                       )
+        bone_settings(bvh_tree=bvh_tree,
+                      shape_collection=shape_collection,
+                      bone_name=full_name, 
+                      layer_index=Constants.fk_layer, 
+                      group_name=Constants.fk_group, 
+                      lock_loc=True, 
+                      lock_scale=True,
+                      bone_shape_name='sphere' if index == 2 else 'inner_circle', 
+                      bone_shape_pos='HEAD' if index == 2 else 'MIDDLE',
+                      bone_shape_up=index == 2 and b3_shape_up,
+                      bone_type=Constants.fk_type
+                      )
+
+        relevant_bone_names.append(full_name)
+
+    # FK LIMITS:
+    # limit fk_b2 to single-axis rotation
+    for axis in axis_locks_int:
+        prop_to_drive_pbone_attribute_with_array_index(prop_bone_name=fk_prefix + b2, 
+                                                       bone_name=fk_prefix + b2, 
+                                                       prop_name='limit_fk_' + module, 
+                                                       attribute='lock_rotation', 
+                                                       array_index=axis, 
+                                                       prop_min=0, 
+                                                       prop_max=1, 
+                                                       prop_default=limit_fk_b2, 
+                                                       description='', 
+                                                       expression='v1'
+                                                       )
+
+    bpy.ops.object.mode_set(mode='POSE')
+    pbone = rig.pose.bones[fk_prefix + b2]
+    c = pbone.constraints.new('LIMIT_ROTATION')
+    c.name = 'Limit rotation'
+    c.owner_space = 'LOCAL'
+    c.use_limit_x = True
+    c.use_limit_y = True
+    c.use_limit_z = True
+    c.use_transform_limit = True
+    if 0 in axis_locks_int:
+        c.min_x = 0
+        c.max_x = 0
+    if 1 in axis_locks_int:
+        c.min_y = 0
+        c.max_y = 0
+    if 2 in axis_locks_int:
+        c.min_z = 0
+        c.max_z = 0
+
+    # limits
+    if b2_bend_axis == 'X':
+        bend_axis = 'x'
+        b2_min = 0 - radians(b2_max_bend_bwrd)
+        b2_max = radians(180) - abs(b2_min)
+    elif b2_bend_axis == '-X':
+        bend_axis = 'x'
+        b2_max = 0 + radians(b2_max_bend_bwrd)
+        b2_min = abs(b2_max) - radians(180)
+
+    if bend_axis == 'x':
+        axis = 0
+        c.min_x = b2_min
+        c.max_x = b2_max
+
+    prop_to_drive_constraint(prop_bone_name=fk_prefix + b2, 
+                             bone_name=fk_prefix + b2, 
+                             constraint_name='Limit rotation',
+                             prop_name='limit_fk_' + module, 
+                             attribute='mute', 
+                             prop_min=0, 
+                             prop_max=1,
+                             prop_default=limit_fk_b2, 
+                             description='', 
+                             expression='1-v1'
+                             )
+
+    # BIND RIG TO FK RIG constraints
+    bpy.ops.object.mode_set(mode='POSE')
+    pbones = rig.pose.bones
+
+    for index, name in enumerate(bone_names):
+        c = pbones[name].constraints.new('COPY_ROTATION')
+        c.name = 'bind_to_fk_1'
+        c.target = rig
+        c.subtarget = fk_prefix + name
+        c.mute = True
+
+    # _____________________________________________________________________________________________________
+
+    # IK
+    for index, name in enumerate(bone_names):
+        if index == 0:
+            parent_name = first_parent_name
+        elif index == 1:
+            parent_name = ik_prefix + bone_names[index - 1]
+        else:
+            """index == 2"""
+            parent_name = ik_b3_parent_name
+        
+        final_name = ik_prefix + name
+        
+        duplicate_bone(source_name=name, 
+                       new_name=final_name, 
+                       parent_name=parent_name
+                       )
+
+        if index == 2:
+            layer = Constants.ctrl_ik_layer
+            lock_loc = False
+        else:
+            layer = Constants.ctrl_ik_extra_layer
+            lock_loc = True
+        
+        bone_settings(bvh_tree=bvh_tree, 
+                      shape_collection=shape_collection, 
+                      bone_name=final_name, 
+                      layer_index=layer, 
+                      group_name=ik_group, 
+                      lock_loc=lock_loc, 
+                      lock_scale=True,
+                      bone_shape_name='cube' if index == 2 else '', 
+                      bone_shape_pos='HEAD', 
+                      bone_shape_up=index == 2 and b3_shape_up, 
+                      bone_type=Constants.ik_type
+                      )
+
+    relevant_bone_names.append(ik_prefix + b3)
+
+    # pole target:
+    
+    bpy.ops.object.mode_set(mode='EDIT')
+    ebones = rig.data.edit_bones
+    
+    pole_pos = calculate_pole_target_location_2(b1=b1, 
+                                                b2=b2, 
+                                                b3=b3, 
+                                                pole_target_distance=Constants.pole_target_distance, 
+                                                b2_bend_axis=b2_bend_axis
+                                                )
+
+    # create pole_target
+    pole_target_name = 'target_' + pole_target_name
+    ebone = ebones.new(name=pole_target_name)
+    ebone.head = pole_pos
+    ebone.tail = pole_pos + Vector((0, 0, Constants.general_bone_size))
+
+    relevant_bone_names.append(pole_target_name)
+
+    # parent it to ik_target
+    if pole_target_parent_name != '':
+        if parent_pole_target_to_ik_target:
+            ebone.parent = ebones[ik_prefix + b3]
+        else:
+            ebone.parent = ebones[pole_target_parent_name]
+        
+    bone_settings(bvh_tree=bvh_tree, 
+                  shape_collection=shape_collection, 
+                  bone_name=pole_target_name, 
+                  layer_index=Constants.ctrl_ik_layer, 
+                  group_name=ik_group, 
+                  lock_scale=False, 
+                  bone_shape_name='sphere', 
+                  bone_shape_pos='HEAD', 
+                  bone_shape_manual_scale=Constants.target_shape_size, 
+                  bone_shape_up=True, 
+                  bone_type=Constants.ik_type
+                  )
+
+    # constraint
+    pole_angle = get_pole_angle(base_bone_name=b1, 
+                                ik_bone_name=b2, 
+                                pole_bone_name=pole_target_name
+                                )
+
+    bpy.ops.object.mode_set(mode='POSE')
+    pbones = rig.pose.bones
+    pbone = pbones[ik_prefix + b2]
+
+    c = pbone.constraints.new('IK')
+    c.target = rig
+    c.subtarget = ik_prefix + b3
+    c.pole_target = rig
+    c.pole_subtarget = pole_target_name
+    c.pole_angle = pole_angle
+    c.chain_count = 2
+    c.use_stretch = inable_stretch
+
+    # pole target line
+    bpy.ops.object.mode_set(mode='EDIT')
+    ebones = rig.data.edit_bones
+    pole_target_line_name = 'target' + '_line_' + pole_target_name
+
+    ebone = ebones.new(name=pole_target_line_name)
+    ebone.head = ebones[ik_prefix + b2].head
+    ebone.tail = ebones[pole_target_name].head
+    ebone.parent = ebones[ik_prefix + b2]
+    
+    bone_settings(bvh_tree=bvh_tree,
+                  shape_collection=shape_collection,
+                  bone_name=pole_target_line_name, 
+                  layer_index=Constants.ctrl_ik_layer, 
+                  group_name=ik_group, 
+                  lock_loc=True, 
+                  lock_rot=True, 
+                  lock_scale=True,
+                  hide_select=True, 
+                  bone_shape_name='line', 
+                  bone_shape_pos='HEAD',
+                  bone_shape_manual_scale=1,
+                  bone_shape_dynamic_size=True,
+                  bone_type=Constants.ik_type
+                  )
+    # contraint              
+    pbone = rig.pose.bones[pole_target_line_name]
+    c = pbone.constraints.new('STRETCH_TO')
+    c.target = rig
+    c.subtarget = pole_target_name
+
+    relevant_bone_names.append(pole_target_line_name)
+
+    # pole target snap position bone
+    # when snapping ik to fk, the pole target copies the location of this bone
+    # this bone is parented to fk bone 2 (forearm, shin)
+    snap_target_pole_name = 'snap_' + pole_target_name
+    
+    duplicate_bone(source_name=pole_target_name, 
+                   new_name=snap_target_pole_name, 
+                   parent_name=fk_prefix + bone_names[1]
+                   )
+    bone_settings(bone_name=snap_target_pole_name, 
+                  layer_index=Constants.ctrl_ik_extra_layer, 
+                  group_name=ik_group, 
+                  lock_loc=True, 
+                  lock_rot=True, 
+                  lock_scale=True,
+                  bone_type=Constants.ik_type
+                  )
+
+    # IK LIMITS:
+    default = 1 if limit_ik_b2 else 0
+    
+    # lock ik axes
+    pbone = pbones[ik_prefix + b2]
+    for axis in axis_locks_string:
+        setattr(pbone, 'lock_ik_' + axis, limit_ik_b2)
+        prop_to_drive_bone_attribute (prop_bone_name=prop_bone_name, 
+                                      bone_name=ik_prefix+b2, 
+                                      bone_type='PBONE', 
+                                      prop_name='limit_ik_'+module, 
+                                      attribute='lock_ik_'+axis, 
+                                      prop_min=0, 
+                                      prop_max=1, 
+                                      prop_default=default, 
+                                      description='', 
+                                      expression='v1'
+                                      )
+
+    # limit rot
+    bpy.ops.object.mode_set(mode='POSE')
+    pbone = rig.pose.bones[ik_prefix + b2]
+    if b2_bend_axis == 'X':
+        pbone.ik_min_x = b2_min
+    elif b2_bend_axis == '-X':
+        pbone.ik_max_x = b2_max
+
+    setattr(pbone, 'use_ik_limit_' + bend_axis, limit_ik_b2)
+    prop_to_drive_bone_attribute (prop_bone_name=prop_bone_name, 
+                                  bone_name=ik_prefix+b2, 
+                                  bone_type='PBONE', 
+                                  prop_name='limit_ik_'+module, 
+                                  attribute='use_ik_limit_'+bend_axis, 
+                                  prop_min=0, 
+                                  prop_max=1, 
+                                  prop_default=default, 
+                                  description='', 
+                                  expression='v1'
+                                  )
+
+    # BIND RIG TO IK RIG constraints
+    bpy.ops.object.mode_set(mode='POSE')
+    pbones = rig.pose.bones
+
+    for index, name in enumerate(bone_names):
+        c = pbones[name].constraints.new('COPY_ROTATION')
+        c.name = 'bind_to_ik_1'
+        c.target = rig
+        c.subtarget = ik_prefix + name
+        c.mute = True
+
+    # BIND RIG TO (0:fk, 1:ik, 2:bind)
+    for name in bone_names:
+        prop_to_drive_constraint(prop_bone_name=prop_bone_name, 
+                                 bone_name=name, 
+                                 constraint_name='bind_to_fk_1',
+                                 prop_name='switch_' + module, 
+                                 attribute='mute', 
+                                 prop_min=0, 
+                                 prop_max=2,
+                                 prop_default=0, 
+                                 description='0:fk, 1:ik, 2:bind',
+                                 expression='1 - (v1 < 1)'
+                                 )
+        prop_to_drive_constraint(prop_bone_name=prop_bone_name, 
+                                 bone_name=name, 
+                                 constraint_name='bind_to_ik_1',
+                                 prop_name='switch_' + module, 
+                                 attribute='mute', 
+                                 prop_min=0, 
+                                 prop_max=2,
+                                 prop_default=0, 
+                                 description='0:fk, 1:ik, 2:bind',
+                                 expression='1 - (v1 > 0 and v1 < 2)'
+                                 )
+
+    # visibility
+    bone_visibility(prop_bone_name=prop_bone_name, 
+                    module=module, 
+                    relevant_bone_names=relevant_bone_names, 
+                    ik_ctrl='ik'
+                    )
+
+    # set module name on relevant bones (used by the interface)
+    set_module_on_relevant_bones(relevant_bone_names=relevant_bone_names, 
+                                 module=module
+                                 )
+
+    # prop that stores bone names for fk/ik snapping
+    bpy.ops.object.mode_set(mode='POSE')
+    pbone = rig.pose.bones[prop_bone_name]
+
+    stem = 'snapinfo_3bonelimb_'
+    index_is_free = False
+    index = 0
+    while not index_is_free:
+        for n in range(0, 1000):
+            prop_name_candidate = stem + str(index + n)
+            if prop_name_candidate not in pbone:
+                pbone[prop_name_candidate] = [fk_prefix + b1, 
+                                              fk_prefix + b2, 
+                                              fk_prefix + b3,
+                                              ik_prefix + b1, 
+                                              ik_prefix + b2, 
+                                              ik_prefix + b3, 
+                                              pole_target_name,
+                                              str(Constants.pole_target_distance), 
+                                              snap_target_pole, 
+                                              fk_prefix + b3,
+                                              ik_prefix + b3, 
+                                              'None'
+                                              ]
+            # stop for loop
+            break
+        # stop while_loop
+        index_is_free = True
 
 
 bvh_tree = BVHTree.FromObject(bpy.context.object.children[0], bpy.context.depsgraph)
 shape_collection = bpy.data.collections['GYAZ_game_rigger_widgets']
 
-
-for side in ('_l', '_r'):   
-    create_twist_bones(bvh_tree=bvh_tree,
-                       shape_collection=shape_collection,
-                       source_bone_name='upperarm'+side, 
-                       count=3, 
-                       upper_or_lower_limb='UPPER', 
-                       twist_target_distance=1, 
-                       end_affector_name='',
-                       influences=Constants.upperarm_twist_influences, 
-                       is_thigh=False
-                       )
-    create_twist_bones(bvh_tree=bvh_tree,
-                       shape_collection=shape_collection,
-                       source_bone_name='forearm'+side, 
-                       count=3, 
-                       upper_or_lower_limb='LOWER', 
-                       twist_target_distance=1, 
-                       end_affector_name='hand'+side,
-                       influences=Constants.forearm_twist_influences, 
-                       is_thigh=False
-                       )
-    create_twist_bones(bvh_tree=bvh_tree,
-                       shape_collection=shape_collection,
-                       source_bone_name='thigh'+side, 
-                       count=3, 
-                       upper_or_lower_limb='UPPER', 
-                       twist_target_distance=1, 
-                       end_affector_name='',
-                       influences=Constants.thigh_twist_influences, 
-                       is_thigh=True
-                       )
-    create_twist_bones(bvh_tree=bvh_tree,
-                       shape_collection=shape_collection,
-                       source_bone_name='shin'+side, 
-                       count=1, 
-                       upper_or_lower_limb='LOWER', 
-                       twist_target_distance=1, 
-                       end_affector_name='foot'+side,
-                       influences=Constants.shin_twist_influences, 
-                       is_thigh=False
-                       )
+for side in ('_l', '_r'):
+    three_bone_limb(bvh_tree, 
+                    shape_collection, 
+                    module='arm'+side, 
+                    b1='upperarm'+side, 
+                    b2='forearm'+side, 
+                    b3='hand'+side, 
+                    pole_target_name='target_elbow'+side, 
+                    parent_pole_target_to_ik_target=False,
+                    b2_bend_axis='X',
+                    b2_bend_back_limit=30, 
+                    first_parent_name='shoulder'+side, 
+                    ik_b3_parent_name='', 
+                    pole_target_parent_name='', 
+                    b3_shape_up=False,
+                    side=side
+                    )
+    three_bone_limb(bvh_tree, 
+                    shape_collection, 
+                    module='leg'+side, 
+                    b1='thigh'+side, 
+                    b2='shin'+side, 
+                    b3='foot'+side, 
+                    pole_target_name='target_knee'+side, 
+                    parent_pole_target_to_ik_target=True,
+                    b2_bend_axis='-X',
+                    b2_bend_back_limit=0, 
+                    first_parent_name='hips', 
+                    ik_b3_parent_name='', 
+                    pole_target_parent_name='', 
+                    b3_shape_up=True,
+                    side=side
+                    )
