@@ -34,6 +34,8 @@ class Constants():
     face_shape_size = 0.005
     look_target_size = face_shape_size * 5
     look_target_offset = 0.5
+    head_target_distance = 1
+    head_target_size = 0.25
     chest_target_distance = 1
     chest_target_size = 0.25
     fallback_shape_size = 0.1
@@ -186,3 +188,5 @@ class Constants():
     ik_type = 'ik'
     ik_prop_type = 'ik_prop'
     ctrl_type = 'ctrl'
+    spring_type = 'spring'
+    touch_type = 'touch'

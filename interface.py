@@ -44,7 +44,18 @@ def get_active_action (obj):
     else:
         action = None
     return action
- 
+
+
+class PG_GYAZ_GameRig(bpy.types.PropertyGroup):
+    switch_when_snap: BoolProperty(name='Switch when snap',
+                                   default=True
+                                   )
+    show_switch_visible: BoolProperty(name='Swow switch/visible',
+                                      default=True
+                                      )
+    show_low_level_props: BoolProperty(name='Swow low-level visible',
+                                       default=True
+                                       )
   
 # SNAP
 #mode: 'FK_to_IK', 'IK_to_FK'
@@ -252,12 +263,13 @@ class Op_GYAZGameRig_SnapFKtoIK (bpy.types.Operator):
     def execute(self, context):
 
         rig = bpy.context.active_object
+        owner = bpy.context.scene.gyaz_rig
         sel_bones = bpy.context.selected_pose_bones
         if len (sel_bones) == 0:
             report (self, 'No selected bones.', 'WARNING')
         else:
             
-            switch = False if rig.data["switch_when_snap"] == 0 else True
+            switch = owner.switch_when_snap
             snap (mode='FK_to_IK', key=False, switch=switch, module_detection='AUTO', module_name='', force_visibility=True)
                 
         # end of operator
@@ -280,12 +292,13 @@ class Op_GYAZGameRig_SnapIKtoFK (bpy.types.Operator):
     def execute(self, context):
         
         rig = bpy.context.active_object
+        owner = bpy.context.scene.gyaz_rig
         sel_bones = bpy.context.selected_pose_bones
         if len (sel_bones) == 0:
             report (self, 'No selected bones.', 'WARNING')
         else:        
         
-            switch = False if rig.data["switch_when_snap"] == 0 else True
+            switch = owner.switch_when_snap
             snap (mode='IK_to_FK', key=False, switch=switch, module_detection='AUTO', module_name='', force_visibility=True)            
             
         # end of operator
@@ -685,49 +698,6 @@ def set_prop (prop):
         rig_data[prop] = 0
 
     
-class Op_GYAZGameRig_SetSwitchWhenSnap (bpy.types.Operator):
-       
-    bl_idname = "anim.gyaz_game_rigger_set_switch_when_snap"  
-    bl_label = "GYAZ Game Rigger: Set Switch When Snap"
-    bl_description = "Switch when snap"
-    
-    # operator function
-    def execute(self, context):
-        
-        set_prop ('switch_when_snap')
-                                    
-        # end of operator
-        return {'FINISHED'}
-    
-class Op_GYAZGameRig_SetSwitchProp (bpy.types.Operator):
-       
-    bl_idname = "anim.gyaz_game_rigger_set_switch_prop"  
-    bl_label = "GYAZ Game Rigger: Set Switch Prop"
-    bl_description = "Set switch"
-    
-    # operator function
-    def execute(self, context):
-        
-        set_prop ('show_switch')
-                                    
-        # end of operator
-        return {'FINISHED'}
-    
-class Op_GYAZGameRig_SetVisibleProp (bpy.types.Operator):
-       
-    bl_idname = "anim.gyaz_game_rigger_set_visible_prop"  
-    bl_label = "GYAZ Game Rigger: Set Visible Prop"
-    bl_description = "Set switch"
-    
-    # operator function
-    def execute(self, context):
-        
-        set_prop ('show_visible')
-                                    
-        # end of operator
-        return {'FINISHED'}
-
-    
 class Op_GYAZGameRig_SelectModuleBones (bpy.types.Operator):
        
     bl_idname = "anim.gyaz_game_rigger_select_module_bones"  
@@ -931,16 +901,21 @@ class BONE_PT_GYAZGameRig (Panel):
         pbones = rig.pose.bones
         rig_data = rig.data
         
-        # low-level rig properties 
-        col = lay.column (align=True)           
-        col.label (text="Low-level Rig:")
-        bone_name = 'module_props__' + 'general'
-        if pbones.get (bone_name) != None:
-            pbone = pbones[bone_name]
-            for prop in pbone.keys():
-                if prop != '_RNA_UI':
-                    slider = False if prop.startswith ('switch') or prop.startswith ('visible') or prop.startswith ('limit') else True
-                    col.prop (pbone, '["'+prop+'"]', slider=slider)
+        owner = bpy.context.scene.gyaz_rig
+        
+        # low-level rig properties
+        row = lay.row (align=True)
+        row.label (text="Low-level Rig:")
+        row.prop (owner, 'show_low_level_props', text='', icon='TRIA_UP' if owner.show_switch_visible else 'TRIA_DOWN', emboss=False)
+        if owner.show_low_level_props:
+            col = lay.column (align=True)           
+            bone_name = 'module_props__' + 'general'
+            if pbones.get (bone_name) != None:
+                pbone = pbones[bone_name]
+                for prop in pbone.keys():
+                    if prop != '_RNA_UI':
+                        slider = False if prop.startswith ('switch') or prop.startswith ('visible') or prop.startswith ('limit') else True
+                        col.prop (pbone, '["'+prop+'"]', slider=slider)
                
         row = lay.row (align=True)     
         row.prop (rig, 'show_in_front')
@@ -980,11 +955,8 @@ class BONE_PT_GYAZGameRig (Panel):
         
         row = lay.row (align=True)
         row.label (text="Module:")
-        prop = rig_data["switch_when_snap"]
-        icon = "CHECKBOX_DEHLT" if prop == 0 else "CHECKBOX_HLT"
-        row.operator (Op_GYAZGameRig_SetSwitchWhenSnap.bl_idname, text='switch when snap', icon=icon, emboss=False)
-        row.operator (Op_GYAZGameRig_SetSwitchProp.bl_idname, text='', icon='TRIA_UP' if rig_data['show_switch'] else 'TRIA_DOWN', emboss=False)
-        row.operator (Op_GYAZGameRig_SetVisibleProp.bl_idname, text='', icon='TRIA_UP' if rig_data['show_visible'] else 'TRIA_DOWN', emboss=False)
+        row.prop (owner, 'switch_when_snap')
+        row.prop (owner, 'show_switch_visible', icon='TRIA_UP' if owner.show_switch_visible else 'TRIA_DOWN', emboss=False, text='')
         row = lay.row ()
         row.enabled = enabled
         col = row.column (align=True)
@@ -1018,7 +990,7 @@ class BONE_PT_GYAZGameRig (Panel):
                     if pbones.get (bone_name) != None:
                         pbone = pbones[bone_name]            
                         for prop in pbone.keys():
-                            if prop.startswith('switch') and rig_data['show_switch']==1 or prop.startswith('visible') and rig_data['show_visible']==1:
+                            if (prop.startswith('switch') or prop.startswith('visible')) and owner.show_switch_visible:
                                 col.prop (pbone, '["'+prop+'"]')
 
                 
@@ -1115,6 +1087,10 @@ def register():
     # referencing icons:
     # icon_value = custom_icons["custom_icon"].icon_id 
     
+    bpy.utils.register_class(PG_GYAZ_GameRig)
+    bpy.types.Scene.gyaz_rig = bpy.props.PointerProperty(type=PG_GYAZ_GameRig)
+    
+    
     bpy.utils.register_class (Op_GYAZGameRig_SnapFKtoIK)  
     bpy.utils.register_class (Op_GYAZGameRig_SnapIKtoFK) 
     bpy.utils.register_class (Op_GYAZGameRig_SnapAndKey) 
@@ -1125,9 +1101,6 @@ def register():
     bpy.utils.register_class (Op_GYAZGameRig_SetSnapPropActive)  
     bpy.utils.register_class (Op_GYAZGameRig_HideSelectCharacterMeshes)
     bpy.utils.register_class (Op_GYAZGameRig_AppendSourceRig)   
-    bpy.utils.register_class (Op_GYAZGameRig_SetSwitchWhenSnap)
-    bpy.utils.register_class (Op_GYAZGameRig_SetSwitchProp)
-    bpy.utils.register_class (Op_GYAZGameRig_SetVisibleProp)
     bpy.utils.register_class (Op_GYAZGameRig_SelectModuleBones)         
     bpy.utils.register_class (Op_GYAZGameRig_SavePropsToAction)         
     bpy.utils.register_class (Op_GYAZGameRig_ResetProps)         
@@ -1140,7 +1113,11 @@ def unregister ():
     
     # custom icons
     global custom_icons
-    bpy.utils.previews.remove (custom_icons)      
+    bpy.utils.previews.remove (custom_icons) 
+    
+    del bpy.types.Scene.gyaz_rig
+    bpy.utils.unregister_class(PG_GYAZ_GameRig)
+    
     
     bpy.utils.unregister_class (Op_GYAZGameRig_SnapFKtoIK)
     bpy.utils.unregister_class (Op_GYAZGameRig_SnapIKtoFK)
@@ -1152,9 +1129,6 @@ def unregister ():
     bpy.utils.unregister_class (Op_GYAZGameRig_SetSnapPropActive)
     bpy.utils.unregister_class (Op_GYAZGameRig_HideSelectCharacterMeshes)
     bpy.utils.unregister_class (Op_GYAZGameRig_AppendSourceRig)
-    bpy.utils.unregister_class (Op_GYAZGameRig_SetSwitchWhenSnap)
-    bpy.utils.unregister_class (Op_GYAZGameRig_SetSwitchProp)
-    bpy.utils.unregister_class (Op_GYAZGameRig_SetVisibleProp)
     bpy.utils.unregister_class (Op_GYAZGameRig_SelectModuleBones)
     bpy.utils.unregister_class (Op_GYAZGameRig_SavePropsToAction)
     bpy.utils.unregister_class (Op_GYAZGameRig_ResetProps)

@@ -78,15 +78,6 @@ def prepare():
             for c in cs:
                 cs.remove(c)
 
-    # for interface
-    rig.data["switch_when_snap"] = 1
-    rig.data["show_switch"] = 0
-    rig.data["show_visible"] = 0
-
-    rig.data['_RNA_UI']['switch_when_snap'] = {'min': 0, 'max': 1, 'soft_min': 0, 'soft_max': 1}
-    rig.data['_RNA_UI']['show_switch'] = {'min': 0, 'max': 1, 'soft_min': 0, 'soft_max': 1}
-    rig.data['_RNA_UI']['show_visible'] = {'min': 0, 'max': 1, 'soft_min': 0, 'soft_max': 1}
-
     # lock mesh transforms
     for child in rig.children:
         if child.type == 'MESH':
@@ -329,22 +320,4 @@ def root_bone(shape_collection):
                   lock_loc=True,
                   lock_rot=True,
                   lock_scale=True
-                  )
-
-
-def ik_prop_bone(bvh_tree, shape_collection, name, source_bone_name, parent_name):
-    
-    duplicate_bone(source_name=source_bone_name, 
-                   new_name=name, 
-                   parent_name=parent_name
-                   )
-    bone_settings(bvh_tree=bvh_tree,
-                  shape_collection=shape_collection, 
-                  bone_name=name, 
-                  layer_index=Constants.ik_prop_layer, 
-                  group_name=Constants.ik_prop_group, 
-                  lock_scale=True,  
-                  bone_shape_name='cube_outer', 
-                  bone_shape_pos='HEAD',
-                  bone_type=Constants.ik_prop_type
                   )

@@ -29,12 +29,17 @@ from .constants import Constants
 from .m_base import prepare
 from .m_base import finalize
 from .m_base import root_bone
-from .m_base import ik_prop_bone
+from .m_misc import ik_prop_bone
+from .m_misc import touch_bone
+from .m_misc import chain_target
 from .m_biped_torso import biped_torso
 from .m_biped_arm import biped_arm
 from .m_biped_leg import biped_leg
 from .m_short_neck import short_neck
 from .m_head import head
+from .m_spring import spring_chest
+from .m_spring import spring_belly
+from .m_spring import spring_bottom
 
 
 class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
@@ -151,6 +156,10 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
             ####################################################################################################
             ####################################################################################################
             
+            fk_prefix = Constants.fk_prefix
+            ik_prefix = Constants.ik_prefix
+            ctrl_prefix = Constants.ctrl_prefix
+            
             bvh_tree, shape_collection, merged_character_mesh = prepare()
             
             root_bone(shape_collection
@@ -165,25 +174,68 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                        shape_collection, 
                        module='spine', 
                        bone_name='neck', 
-                       distributor_parent_name=Constants.ctrl_prefix + 'torso', 
-                       ik_rot_bone_name=Constants.ctrl_prefix + 'chest', 
-                       ik_loc_bone_name=Constants.ik_prefix + 'spine_3', 
+                       distributor_parent_name=ctrl_prefix + 'torso', 
+                       ik_rot_bone_name=ctrl_prefix + 'chest', 
+                       ik_loc_bone_name=ik_prefix + 'spine_3', 
                        use_twist=True
                        )
             head(bvh_tree, 
                  shape_collection, 
                  module='spine', 
                  bone_name='head', 
-                 ik_rot_bone_name=Constants.ctrl_prefix + 'neck', 
-                 ik_loc_bone_name=Constants.ik_prefix + 'neck', 
-                 distributor_parent_name=Constants.ctrl_prefix + 'torso'
+                 ik_rot_bone_name=ctrl_prefix + 'neck', 
+                 ik_loc_bone_name=ik_prefix + 'neck', 
+                 distributor_parent_name=ctrl_prefix + 'torso'
                  )
             ik_prop_bone(bvh_tree,
                          shape_collection,
                          name='ik_hand_prop', 
                          source_bone_name='hand_r', 
                          parent_name='root_extract'
-                         )             
+                         )
+            spring_belly(bvh_tree, 
+                         shape_collection, 
+                         module='spring', 
+                         waist_bone_names=['spine_1', 'spine_2'], 
+                         loc_pelvis_front='loc_pelvis_front', 
+                         loc_sternum_lower='loc_sternum_lower'
+                         )
+            touch_bone(bvh_tree, 
+                       shape_collection, 
+                       module='spine', 
+                       source_bone_name='ctrl_torso', 
+                       ik_bone_name='ctrl_torso', 
+                       side='_c', 
+                       bone_shape_up=False
+                       )
+            chain_target(bvh_tree, 
+                         shape_collection, 
+                         fk_chain=[fk_prefix + 'neck', fk_prefix + 'head'], 
+                         ik_chain=['ctrl_neck', 'ctrl_head'], 
+                         chain_target_distance=Constants.head_target_distance, 
+                         chain_target_size=Constants.head_target_size, 
+                         target_name='target_head', 
+                         bone_shape_name='sphere', 
+                         use_copy_loc=False, 
+                         copy_loc_target_bone_name='', 
+                         add_constraint_to_layer=True, 
+                         module='spine', 
+                         prop_name='visible_spine_targets'
+                         )
+            chain_target(bvh_tree, 
+                         shape_collection, 
+                         fk_chain=[fk_prefix + 'hips', fk_prefix + 'spine_1', fk_prefix + 'spine_2', fk_prefix + 'spine_3'], 
+                         ik_chain=['ctrl_chest'], 
+                         chain_target_distance=Constants.chest_target_distance, 
+                         chain_target_size=Constants.chest_target_size, 
+                         target_name='target_chest', 
+                         bone_shape_name='cube', 
+                         use_copy_loc=True, 
+                         copy_loc_target_bone_name='target_head', 
+                         add_constraint_to_layer=False, 
+                         module='spine', 
+                         prop_name='visible_spine_targets'
+                         )
                          
             for side in Constants.sides:
                 biped_arm(bvh_tree, 
@@ -210,6 +262,35 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                           thigh_twist_count=generate__twist_thigh_count, 
                           shin_twist_count=generate__twist_shin_count
                           )
+                spring_chest(bvh_tree, 
+                             shape_collection, 
+                             module='spring', 
+                             chest_name='spring_chest' + side, 
+                             shoulder_name='shoulder' + side
+                             )
+                spring_bottom(bvh_tree, 
+                              shape_collection, 
+                              module='spring', 
+                              source_bone_name='thigh' + side, 
+                              parent_name='hips', 
+                              side=side,
+                              )
+                touch_bone(bvh_tree, 
+                           shape_collection, 
+                           module='arm' + side, 
+                           source_bone_name='hand' + side, 
+                           ik_bone_name=Constants.ik_prefix + 'hand' + side, 
+                           side=side, 
+                           bone_shape_up=False
+                           )
+                touch_bone(bvh_tree, 
+                           shape_collection, 
+                           module='leg' + side, 
+                           source_bone_name='foot' + side, 
+                           ik_bone_name=Constants.ik_prefix + 'main_foot' + side, 
+                           side=side, 
+                           bone_shape_up=True
+                           )
                           
             finalize(merged_character_mesh=merged_character_mesh)
 

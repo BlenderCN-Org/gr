@@ -326,6 +326,17 @@ def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_inde
             
     else:
         pbone.custom_shape = None
+        
+        
+def set_bone_shape(shape_collection, bone_name, bone_shape_name, bone_shape_scale, transform_bone_name=''):
+    bpy.ops.object.mode_set(mode='POSE')
+    pbones = bpy.context.object.pose.bones
+    wgt = shape_collection.objects['GYAZ_game_rigger_WIDGET__' + bone_shape_name]
+    pbones[bone_name].custom_shape = wgt
+    if transform_bone_name != '':        
+        pbones[bone_name].custom_shape_transform = pbones[transform_bone_name]              
+    pbones[bone_name].use_custom_shape_bone_size = False
+    pbones[bone_name].custom_shape_scale = bone_shape_scale
 
 
 # parent_name: bone name, 'SOURCE_PARENT', ''
@@ -373,22 +384,24 @@ def create_no_twist_bone(source_bone_name):
     # used with twist_targets
     rig = bpy.context.object
     no_twist_name = 'no_twist_' + source_bone_name
-    duplicate_bone(source_name=source_bone_name, 
-                   new_name=no_twist_name, 
-                   parent_name='SOURCE_PARENT', 
-                   half_long=True
-                   )
-    bpy.ops.object.mode_set(mode='POSE')
-    pbone = rig.pose.bones[no_twist_name]
-    c = pbone.constraints.new('DAMPED_TRACK')
-    c.target = rig
-    c.subtarget = source_bone_name
-    c.head_tail = 1
-    bone_settings(bone_name=no_twist_name, 
-                  layer_index=Constants.misc_layer, 
-                  lock_loc=True, 
-                  lock_scale=True
-                  )
+    if no_twist_name not in rig.data.bones:
+    
+        duplicate_bone(source_name=source_bone_name, 
+                       new_name=no_twist_name, 
+                       parent_name='SOURCE_PARENT', 
+                       half_long=True
+                       )
+        bpy.ops.object.mode_set(mode='POSE')
+        pbone = rig.pose.bones[no_twist_name]
+        c = pbone.constraints.new('DAMPED_TRACK')
+        c.target = rig
+        c.subtarget = source_bone_name
+        c.head_tail = 1
+        bone_settings(bone_name=no_twist_name, 
+                      layer_index=Constants.misc_layer, 
+                      lock_loc=True, 
+                      lock_scale=True
+                      )
     
     return no_twist_name
 
