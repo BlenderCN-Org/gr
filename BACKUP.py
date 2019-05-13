@@ -1123,7 +1123,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
             ########################################################################################################
             ########################################################################################################
 
-            def create_mudule_prop_bone(module):
+            def create_module_prop_bone(module):
                 bpy.ops.object.mode_set(mode='EDIT')
                 name = 'module_props__' + module
                 ebones = rig.data.edit_bones
@@ -1232,7 +1232,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                 n_relevant_bones = []
 
                 # for module properties
-                n_prop_bone = create_mudule_prop_bone(module=module)
+                n_prop_bone = create_module_prop_bone(module=module)
 
                 # AXIS LOCKS
                 if b2_bend_axis == 'X' or '-X':
@@ -1557,7 +1557,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
 
             def isolate_rotation(module, parent_bone, first_bone):
                 # should only be used to affect FK BONES
-                prop_bone = create_mudule_prop_bone(module)
+                prop_bone = create_module_prop_bone(module)
 
                 # delete parent relationship tween parent_bone and first bone
                 bpy.ops.object.mode_set(mode='EDIT')
@@ -1694,7 +1694,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                 rig.show_in_front = False
                 rig.data.use_deform_delay = False
 
-                create_mudule_prop_bone('general')
+                create_module_prop_bone('general')
 
                 # delete constraints from all bones, should any exist
                 bpy.ops.object.mode_set(mode='POSE')
@@ -1869,7 +1869,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                 relevant_bones = []
 
                 # bone that holds all properties of the module
-                prop_bone = create_mudule_prop_bone(module)
+                prop_bone = create_module_prop_bone(module)
 
                 # LOW-LEVEL BONES
                 set_parent_chain(chain, first_parent=first_parent)
@@ -2278,7 +2278,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                 relevant_bones = []
 
                 # bone that holds all properties of the module
-                prop_bone = create_mudule_prop_bone(module)
+                prop_bone = create_module_prop_bone(module)
 
                 # set parent
                 parent = get_parent(bone_name)
@@ -2524,7 +2524,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                 relevant_bones = []
 
                 # bone that holds all properties of the module
-                prop_bone = create_mudule_prop_bone(module)
+                prop_bone = create_module_prop_bone(module)
 
                 # set parent
                 parent = get_parent(bone_name)
@@ -2690,7 +2690,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                     relevant_bones = []
 
                     # bone that holds all properties of the module
-                    prop_bone = create_mudule_prop_bone(module)
+                    prop_bone = create_module_prop_bone(module)
 
                     # target belly
                     bpy.ops.object.mode_set(mode='EDIT')
@@ -2886,7 +2886,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                     relevant_bones = []
 
                     # bone that holds all properties of the module
-                    prop_bone = create_mudule_prop_bone(module)
+                    prop_bone = create_module_prop_bone(module)
 
                     # bone settings
                     name = chest
@@ -3161,7 +3161,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                 n_relevant_bones = []
 
                 # bone that holds all properties of the module
-                n_prop_bone = create_mudule_prop_bone(module=module)
+                n_prop_bone = create_module_prop_bone(module=module)
 
                 # LOW-LEVEL BONES
                 # set parents
@@ -3282,7 +3282,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                 relevant_bones = []
 
                 # bone that holds all properties of the module
-                prop_bone = create_mudule_prop_bone(module=module)
+                prop_bone = create_module_prop_bone(module=module)
 
                 # set parent
                 first_parent = get_parent(chain[0])
@@ -3697,7 +3697,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                     relevant_bones = []
 
                     # bone that holds all properties of the module
-                    prop_bone = create_mudule_prop_bone(module)
+                    prop_bone = create_module_prop_bone(module)
 
                     # set parent
                     first_parent = get_parent(finger_names[0] + '_1' + side)
@@ -4005,7 +4005,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
 
                 if generate__face_eyes == True:
 
-                    prop_bone = create_mudule_prop_bone(module)
+                    prop_bone = create_module_prop_bone(module)
                     relevant_bones = []
 
                     # create face parent bone
@@ -4167,7 +4167,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
 
                 if generate__face_detail == True:
 
-                    prop_bone = create_mudule_prop_bone(module)
+                    prop_bone = create_module_prop_bone(module)
                     relevant_bones = []
 
                     # set parent

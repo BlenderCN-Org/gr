@@ -24,12 +24,13 @@ import bpy
 from mathutils.bvhtree import BVHTree
 from mathutils import Vector
 
+from .constants import Constants
 from .utils import create_module_prop_bone
 from .utils import bone_settings
 from .utils import link_collection
 from .utils import prop_to_drive_layer
 from .utils import duplicate_bone
-from .constants import Constants
+from .utils import set_bone_only_layer
 
 
 def prepare():
@@ -47,9 +48,9 @@ def prepare():
         bpy.ops.object.mode_set(mode='OBJECT')
         
     for bone in rig.data.bones:
-        bools = [False] * 32
-        bools[Constants.source_layer] = True
-        bone.layers = bools
+        set_bone_only_layer(bone_name=bone.name, 
+                            layer_index=Constants.source_layer
+                            )
 
     # make all bone layers visible
     for n in range(0, 32):

@@ -37,9 +37,10 @@ from .utils import isolate_rotation
 from .utils import get_ik_group_name
 from .utils import snappable_module
 from .utils import create_twist_bones
+from .utils import get_parent_name
 
 
-def biped_arm(bvh_tree, shape_collection, module, chain, first_parent_name, pole_target_name, forearm_bend_back_limit, ik_hand_parent_name, pole_target_parent_name, side, upperarm_twist_count, forearm_twist_count):
+def biped_arm(bvh_tree, shape_collection, module, chain, pole_target_name, forearm_bend_back_limit, ik_hand_parent_name, pole_target_parent_name, side, upperarm_twist_count, forearm_twist_count):
     
     rig = bpy.context.object
     
@@ -49,9 +50,11 @@ def biped_arm(bvh_tree, shape_collection, module, chain, first_parent_name, pole
     forearm_name = chain[2]
     hand_name = chain[3]
     
+    first_parent_name = get_parent_name(chain[0])
+    
     fk_prefix = Constants.fk_prefix
     ik_prefix = Constants.ik_prefix
-
+    
     # bones that should be used for animation
     relevant_bone_names = []
 
@@ -221,7 +224,6 @@ def biped_arm(bvh_tree, shape_collection, module, chain, first_parent_name, pole
     # make the 'Snap&Key' operator recognize this module
     snappable_module(module)
     
-    
     # TWIST BONES
     create_twist_bones(bvh_tree=bvh_tree, 
                        shape_collection=shape_collection, 
@@ -230,7 +232,7 @@ def biped_arm(bvh_tree, shape_collection, module, chain, first_parent_name, pole
                        upper_or_lower_limb='UPPER', 
                        twist_target_distance=Constants.twist_target_distance, 
                        end_affector_name='', 
-                       influences=Constants.forearm_twist_influences, 
+                       influences=Constants.upperarm_twist_influences, 
                        is_thigh=False
                        )
     create_twist_bones(bvh_tree=bvh_tree, 

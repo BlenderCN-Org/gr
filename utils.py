@@ -144,7 +144,7 @@ def create_leaf_bone(bone_name, source_bone_name, start_middle=False, parent_nam
 # bone_shape_pos: 'HEAD', 'MIDDLE', 'TAIL'
 # lock_loc... expects bool or container of 3 bools
 # bvh_tree is needed if a bone_shape_name != '' and bone_shape_manual_scale is not None
-def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_index=0, group_name='', use_deform=False, lock_loc=False, lock_rot=False, lock_scale=False, hide_select=False, bone_shape_name='', bone_shape_pos='MIDDLE', bone_shape_manual_scale=None, bone_shape_up=False, bone_shape_up_only_for_ray_casting=False, bone_shape_dynamic_size=False, bone_shape_bone='', bone_type=''):
+def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_index=0, group_name='', use_deform=False, lock_loc=False, lock_rot=False, lock_scale=False, hide_select=False, bone_shape_name='', bone_shape_pos='MIDDLE', bone_shape_manual_scale=None, bone_shape_up=False, bone_shape_up_only_for_ray_casting=False, bone_shape_up_only_for_transform=False, bone_shape_dynamic_size=False, bone_shape_bone='', bone_type=''):
     
     rig = bpy.context.object
     
@@ -234,7 +234,7 @@ def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_inde
             # get check points around bone
             number_of_checks = 4
             
-            if bone_shape_up:
+            if bone_shape_up and not bone_shape_up_only_for_transform:
                 mat = Matrix(((1.0, 0.0, 0.0, 0.3396),
                              (0.0, 0.0, -1.0, 0.4289),
                              (0.0, 1.0, 0.0, 0.1819),
@@ -1357,41 +1357,6 @@ def three_bone_limb(bvh_tree, shape_collection, module, b1, b2, b3, pole_target_
 #bvh_tree = BVHTree.FromObject(bpy.context.object.children[0], bpy.context.depsgraph)
 #shape_collection = bpy.data.collections['GYAZ_game_rigger_widgets']
 
-#for side in ('_l', '_r'):
-#    three_bone_limb(bvh_tree, 
-#                    shape_collection, 
-#                    module='arm'+side, 
-#                    b1='upperarm'+side, 
-#                    b2='forearm'+side, 
-#                    b3='hand'+side, 
-#                    pole_target_name='elbow'+side, 
-#                    parent_pole_target_to_ik_target=False,
-#                    b2_bend_axis='X',
-#                    b2_bend_back_limit=30, 
-#                    first_parent_name='shoulder'+side, 
-#                    ik_b3_parent_name='', 
-#                    pole_target_parent_name='', 
-#                    b3_shape_up=False,
-#                    side=side
-#                    )
-#    three_bone_limb(bvh_tree, 
-#                    shape_collection, 
-#                    module='leg'+side, 
-#                    b1='thigh'+side, 
-#                    b2='shin'+side, 
-#                    b3='foot'+side, 
-#                    pole_target_name='knee'+side, 
-#                    parent_pole_target_to_ik_target=True,
-#                    b2_bend_axis='-X',
-#                    b2_bend_back_limit=0, 
-#                    first_parent_name='hips', 
-#                    ik_b3_parent_name='', 
-#                    pole_target_parent_name='', 
-#                    b3_shape_up=True,
-#                    side=side
-#                    )
-                    
-
 # should only be used to affect FK BONES
 def isolate_rotation(module, parent_bone_name, first_bone_name):
     
@@ -1469,3 +1434,15 @@ def isolate_rotation(module, parent_bone_name, first_bone_name):
                              description='', 
                              expression='1-v1'
                              )
+                        
+def get_parent_name(name):
+    if bpy.context.mode != 'ARMATURE_EDIT':
+        bpy.ops.object.mode_set(mode='EDIT')
+    return bpy.context.object.data.edit_bones[name].parent.name
+
+def set_bone_only_layer(bone_name, layer_index):
+    if bpy.context.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    bools = [False] * 32
+    bools[layer_index] = True
+    bpy.context.object.data.bones[bone_name].layers = bools

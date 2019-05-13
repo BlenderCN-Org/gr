@@ -21,6 +21,8 @@
 ##########################################################################################################
 
 import bpy
+from math import radians
+from mathutils import Vector
 
 from .constants import Constants
 from .utils import create_module_prop_bone
@@ -34,22 +36,44 @@ from .utils import bone_visibility
 from .utils import set_module_on_relevant_bones
 from .utils import three_bone_limb
 from .utils import isolate_rotation
+from .utils import get_parent_name
+from .utils import set_bone_only_layer
+from .utils import get_ik_group_name
+from .utils import prop_to_drive_pbone_attribute_with_array_index
+from .utils import prop_to_drive_pbone_attribute_with_array_index
+from .utils import create_twist_bones
+from .utils import snappable_module
 
 
-def biped_leg(module, chain, pole_target, parent_pt_to_ik_target, shin_bend_axis, shin_bend_back, ik_parent, foot_toes_bend_axis, pole_parent, side):
-
-    ik_group = set_ik_group(side)
-
+def biped_leg(bvh_tree, shape_collection, module, chain, pole_target_name, shin_bend_back_limit, ik_foot_parent_name, pole_target_parent_name, side, thigh_twist_count, shin_twist_count):
+    
     # chain length should be exactly 4
+    
+    rig = bpy.context.object    
+    ik_group_name = get_ik_group_name(side)
 
+    thigh_name = chain[0]    
+    shin_name = chain[1]    
+    foot_name = chain[2]    
+    toes_name = chain[3]
+    
+    first_parent_name = get_parent_name(thigh_name)
+    
+    fk_prefix = Constants.fk_prefix
+    ik_prefix = Constants.ik_prefix
+    ik_group_name = get_ik_group_name(side=side)
+    
+    toes_bend_axis = '-X'
+    shin_bend_axis = '-X'
+    
     # bones that should be used for animation
-    relevant_bones = []
+    relevant_bone_names = []
 
     # bone that holds all properties of the module
-    prop_bone_name = create_mudule_prop_bone(module=module)
+    prop_bone_name = create_module_prop_bone(module=module)
 
     # set parent
-    first_parent = get_parent(chain[0])
+    first_parent_name = get_parent_name(thigh_name)
 
     # LOW-LEVEL BONES
     # set parents
@@ -57,134 +81,199 @@ def biped_leg(module, chain, pole_target, parent_pt_to_ik_target, shin_bend_axis
         bpy.ops.object.mode_set(mode='EDIT')
         ebones = rig.data.edit_bones
         if index == 0:
-            ebones[name].parent = ebones[first_parent]
+            ebones[name].parent = ebones[first_parent_name]
         else:
             ebones[name].parent = ebones[chain[index - 1]]
 
-        relevant_bones.append(name)
-        bone_settings(name=name, layer=base_layer, group=base_group, deform=True, lock_loc=True,
-                      lock_rot=False, lock_scale=True, type='base')
-
+        relevant_bone_names.append(name)
+        
+        bone_settings(bone_name=name, 
+                      layer_index=Constants.base_layer, 
+                      group_name=Constants.base_group, 
+                      use_deform=True, 
+                      lock_loc=True,
+                      lock_scale=True,
+                      bone_type=Constants.base_type
+                      )
     # _____________________________________________________________________________________________________
-
+    
     # three bone limb set-up
-    three_bone_limb(module=module, b1=chain[0], b2=chain[1], b3=chain[2], pole_target=pole_target,
-                    pt_distance=pole_target_distance, parent_pt_to_ik_target=parent_pt_to_ik_target,
-                    b2_bend_axis=shin_bend_axis, b2_bend_back=shin_bend_back, first_parent=first_parent,
-                    fk_layer=fk_layer, ctrl_ik_layer=ctrl_ik_layer, ik_group=ik_group,
-                    keep_last_bone_rot_when_radius_check=False, ik_parent=ik_parent,
-                    pole_parent=pole_parent, b3_shape_bone='UP')
-
-    isolate_rotation(module=module, parent_bone=first_parent, first_bone=fk_prefix + chain[0])
+    three_bone_limb(bvh_tree=bvh_tree, 
+                    shape_collection=shape_collection, 
+                    module=module, 
+                    b1=thigh_name, 
+                    b2=shin_name, 
+                    b3=foot_name, 
+                    pole_target_name=pole_target_name, 
+                    parent_pole_target_to_ik_target=True,
+                    b2_bend_axis='-X',
+                    b2_bend_back_limit=shin_bend_back_limit, 
+                    first_parent_name=first_parent_name,
+                    ik_b3_parent_name=ik_foot_parent_name, 
+                    pole_target_parent_name=pole_target_parent_name, 
+                    b3_shape_up=True,
+                    side=side
+                    )
+    isolate_rotation(module=module, 
+                     parent_bone_name=fk_prefix + first_parent_name, 
+                     first_bone_name=fk_prefix + thigh_name
+                     )
 
     # TOES BONE:
     # FK
-    name = fk_prefix + chain[3]
-    duplicate_bone(source_name=chain[3], new_name=name, parent_name=fk_prefix + chain[2],
-                   roll_override=False, length_override=None)
-    bone_settings(name=name, layer=fk_layer, group='fk', deform=False, lock_loc=True, lock_rot=False,
-                  lock_scale=True, type='fk')
-    set_bone_shape(bone_name=name, shape='sphere', transform_bone=None, auto_scale_with_offset=False,
-                   manual_scale=target_shape_size, shape_bone=None, keep_rot_when_radius_check=False,
-                   use_bone_size=False, shape_bone_parent_override=False)
-    relevant_bones.append(name)
+    name = fk_prefix + toes_name
+    duplicate_bone(source_name=toes_name, 
+                   new_name=name, 
+                   parent_name=fk_prefix + foot_name
+                   )
+    bone_settings(bvh_tree=bvh_tree, 
+                  shape_collection=shape_collection, 
+                  bone_name=name, 
+                  layer_index=Constants.fk_layer, 
+                  group_name=Constants.fk_group, 
+                  lock_loc=True, 
+                  lock_scale=True,
+                  bone_shape_name='sphere', 
+                  bone_shape_pos='MIDDLE',
+                  bone_shape_up=True,
+                  bone_shape_up_only_for_transform=True,
+                  bone_type=Constants.fk_type
+                  )
+    relevant_bone_names.append(name)
 
     # bind low-level bones to FK constraints
     bpy.ops.object.mode_set(mode='POSE')
-    pbone = rig.pose.bones[chain[3]]
+    pbone = rig.pose.bones[toes_name]
 
     c = pbone.constraints.new('COPY_ROTATION')
     c.name = 'bind_to_fk_1'
     c.target = rig
-    c.subtarget = fk_prefix + chain[3]
+    c.subtarget = fk_prefix + toes_name
     c.mute = True
 
     # lock toe axes
-    bend_axis = foot_toes_bend_axis
-    if 'X' in bend_axis:
+    if toes_bend_axis == 'X' or toes_bend_axis == '-X':
         lock_1 = 1
         lock_2 = 2
 
     for ai in [lock_1, lock_2]:
-        prop_to_drive_pbone_attribute_with_array_index(name, bone_name=name,
+        prop_to_drive_pbone_attribute_with_array_index(prop_bone_name=name, 
+                                                       bone_name=name,
                                                        prop_name='limit_fk_toes' + side,
-                                                       attribute='lock_rotation', array_index=ai,
-                                                       prop_min=0, prop_max=1, prop_default=0,
+                                                       attribute='lock_rotation', 
+                                                       array_index=ai,
+                                                       prop_min=0, 
+                                                       prop_max=1, 
+                                                       prop_default=0,
                                                        description='limit toes to single axis rotation',
-                                                       expression='v1')
+                                                       expression='v1'
+                                                       )
 
     # filler bones (needed for GYAZ retargeter)
     bpy.ops.object.mode_set(mode='EDIT')
-    ebone = rig.data.edit_bones.new(name='fk_filler_' + chain[0])
+    filler_name = 'fk_filler_' + thigh_name
+    ebone = rig.data.edit_bones.new(name=filler_name)
     ebones = rig.data.edit_bones
-    ebone.head = ebones[first_parent].head
-    ebone.tail = ebones[chain[0]].head
+    ebone.head = ebones[first_parent_name].head
+    ebone.tail = ebones[thigh_name].head
     ebone.roll = 0
-    ebone.parent = ebones[first_parent]
-    set_bone_only_layer(bone_name=ebone.name, layer_index=fk_extra_layer)
+    ebone.parent = ebones[first_parent_name]
+    set_bone_only_layer(bone_name=filler_name, 
+                        layer_index=Constants.fk_extra_layer
+                        )
 
     # IK
-    name = ik_prefix + chain[3]
-    duplicate_bone(source_name=chain[3], new_name=name, parent_name=ik_prefix + chain[2],
-                   roll_override=False, length_override=None)
-    bone_settings(name=name, layer=ctrl_ik_layer, group=ik_group, deform=False, lock_loc=True,
-                  lock_rot=False, lock_scale=True, type='ik')
-    set_bone_shape(bone_name=name, shape='cube', transform_bone=None, auto_scale_with_offset=False,
-                   manual_scale=target_shape_size, shape_bone=None, keep_rot_when_radius_check=False,
-                   use_bone_size=False, shape_bone_parent_override=False)
-    relevant_bones.append(name)
+    name = ik_prefix + toes_name
+    duplicate_bone(source_name=toes_name, 
+                   new_name=name, 
+                   parent_name=ik_prefix + foot_name
+                   )
+    bone_settings(bvh_tree=bvh_tree, 
+                  shape_collection=shape_collection, 
+                  bone_name=name, 
+                  layer_index=Constants.ctrl_ik_layer, 
+                  group_name=ik_group_name,
+                  lock_loc=True,
+                  lock_scale=True, 
+                  bone_shape_name='cube', 
+                  bone_shape_pos='MIDDLE',
+                  bone_shape_up=True,
+                  bone_shape_up_only_for_transform=True,
+                  bone_type=Constants.ik_type
+                  )
+    relevant_bone_names.append(name)
 
     # lock toe axes
-    bend_axis = foot_toes_bend_axis
-    if 'X' in bend_axis:
+    if toes_bend_axis == 'X' or toes_bend_axis == '-X':
         lock_1 = 1
         lock_2 = 2
 
     for ai in [lock_1, lock_2]:
-        prop_to_drive_pbone_attribute_with_array_index(name, bone_name=name,
+        prop_to_drive_pbone_attribute_with_array_index(prop_bone_name=name, 
+                                                       bone_name=name,
                                                        prop_name='limit_ik_toes' + side,
-                                                       attribute='lock_rotation', array_index=ai,
-                                                       prop_min=0, prop_max=1, prop_default=1,
+                                                       attribute='lock_rotation', 
+                                                       array_index=ai,
+                                                       prop_min=0, 
+                                                       prop_max=1, 
+                                                       prop_default=1,
                                                        description='limit toes to single axis rotation',
-                                                       expression='v1')
+                                                       expression='v1'
+                                                       )
 
     # bind low-level bones to IK constraints
     bpy.ops.object.mode_set(mode='POSE')
-    pbone = rig.pose.bones[chain[3]]
+    pbone = rig.pose.bones[toes_name]
 
     c = pbone.constraints.new('COPY_ROTATION')
     c.name = 'bind_to_ik_1'
     c.target = rig
-    c.subtarget = ik_prefix + chain[3]
+    c.subtarget = ik_prefix + toes_name
     c.mute = True
 
     # BIND TO (0: FK, 1: IK, 2:BIND)
-    prop_to_drive_constraint(prop_bone_name, bone_name=chain[3], constraint_name='bind_to_fk_1',
-                             prop_name='switch_' + module, attribute='mute', prop_min=0, prop_max=2,
-                             prop_default=0, description='0:fk, 1:ik, 2:base', expression='1 - (v1 < 1)')
-    prop_to_drive_constraint(prop_bone_name, bone_name=chain[3], constraint_name='bind_to_ik_1',
-                             prop_name='switch_' + module, attribute='mute', prop_min=0, prop_max=2,
-                             prop_default=0, description='0:fk, 1:ik, 2:base',
-                             expression='1 - (v1 > 0 and v1 < 2)')
+    prop_to_drive_constraint(prop_bone_name=prop_bone_name, 
+                             bone_name=toes_name, 
+                             constraint_name='bind_to_fk_1',
+                             prop_name='switch_' + module, 
+                             attribute='mute', 
+                             prop_min=0, 
+                             prop_max=2,
+                             prop_default=0, 
+                             description='0:fk, 1:ik, 2:base', 
+                             expression='1 - (v1 < 1)'
+                             )
+    prop_to_drive_constraint(prop_bone_name=prop_bone_name, 
+                             bone_name=toes_name, 
+                             constraint_name='bind_to_ik_1',
+                             prop_name='switch_' + module, 
+                             attribute='mute', 
+                             prop_min=0, 
+                             prop_max=2,
+                             prop_default=0, 
+                             description='0:fk, 1:ik, 2:base',
+                             expression='1 - (v1 > 0 and v1 < 2)'
+                             )
 
     # SNAP INFO
     bpy.ops.object.mode_set(mode='POSE')
     pbone = rig.pose.bones[prop_bone_name]
-    pbone['snapinfo_singlebone_0'] = [fk_prefix + chain[3], ik_prefix + chain[3]]
+    pbone['snapinfo_singlebone_0'] = [fk_prefix + toes_name, ik_prefix + toes_name]
 
     # FOOT ROLL:
     # get heel position
-    foot = chain[2]
-    toes = chain[3]
     bpy.ops.object.mode_set(mode='EDIT')
 
     # set ray start and direction
-    ray_start = rig.data.edit_bones[toes].head
+    ray_start = rig.data.edit_bones[toes_name].head
     ray_direction = (0, 1, 0)
     ray_distance = 1
 
     # cast ray
-    hit_loc, hit_nor, hit_index, hit_dist = my_tree.ray_cast(ray_start, ray_direction, ray_distance)
+    hit_loc, hit_nor, hit_index, hit_dist = bvh_tree.ray_cast(ray_start, 
+                                                              ray_direction, 
+                                                              ray_distance
+                                                              )
 
     # third-point of toes.head and hit_loc(heel)
     difference = ray_start - hit_loc
@@ -194,109 +283,146 @@ def biped_leg(module, chain, pole_target, parent_pt_to_ik_target, shin_bend_axis
     # ik foot main
     bpy.ops.object.mode_set(mode='EDIT')
     ebones = rig.data.edit_bones
-    ik_foot_main = ik_prefix + 'main_' + foot
-    ebone = ebones.new(name=ik_foot_main)
-    ik_foot_name = ik_prefix + foot
+    ik_foot_main_name = ik_prefix + 'main_' + foot_name
+    ebone = ebones.new(name=ik_foot_main_name)
+    ik_foot_name = ik_prefix + foot_name
     ik_foot_ebone = ebones[ik_foot_name]
     foot_length = get_distance(ik_foot_ebone.head, ik_foot_ebone.tail)
     ebone.head = ik_foot_ebone.head
     ebone.tail = (ik_foot_ebone.head[0], ik_foot_ebone.head[1] - foot_length, ik_foot_ebone.head[2])
     ebone.roll = radians(-180) if side == '_l' else radians(180)
-    ebone.parent = ebones[ik_parent]
-    bone_settings(name=ik_foot_main, layer=ctrl_ik_layer, group=ik_group, deform=False, lock_loc=False,
-                  lock_rot=False, lock_scale=True, type='ik')
-    set_bone_shape(bone_name=ik_foot_main, shape='cube', transform_bone=None,
-                   auto_scale_with_offset=auto_bone_shape_scale_offset_limb, manual_scale=1,
-                   shape_bone='UP', keep_rot_when_radius_check=False, use_bone_size=False,
-                   shape_bone_parent_override=False)
-    relevant_bones.append(ik_foot_main)
+    ebone.parent = ebones[ik_foot_parent_name]
+    
+    bone_settings(bvh_tree=bvh_tree, 
+                  shape_collection=shape_collection, 
+                  bone_name=ik_foot_main_name, 
+                  layer_index=Constants.ctrl_ik_layer, 
+                  group_name=ik_group_name, 
+                  lock_scale=True,
+                  bone_shape_name='cube', 
+                  bone_shape_pos='HEAD',
+                  bone_shape_up=True,
+                  bone_type=Constants.ik_type
+                  )
+    relevant_bone_names.append(ik_foot_main_name)
 
     # ik foot snap target
-    snap_target_foot = 'snap_target_' + foot
-    duplicate_bone(source_name=ik_foot_main, new_name=snap_target_foot, parent_name=fk_prefix + foot,
-                   roll_override=False, length_override=False)
-    bone_settings(name=snap_target_foot, layer=fk_extra_layer, group=None, deform=False, lock_loc=True,
-                  lock_rot=True, lock_scale=True, type=None)
+    snap_target_foot_name = 'snap_target_' + foot_name
+    duplicate_bone(source_name=ik_foot_main_name, 
+                   new_name=snap_target_foot_name, 
+                   parent_name=fk_prefix + foot_name,
+                   )
+    bone_settings(bone_name=snap_target_foot_name, 
+                  layer_index=Constants.fk_extra_layer, 
+                  lock_loc=True, 
+                  lock_rot=True, 
+                  lock_scale=True
+                  )
 
     # foot roll back
     bpy.ops.object.mode_set(mode='EDIT')
     ebones = rig.data.edit_bones
-    foot_roll_back = 'roll_back_' + foot
-    ebone = ebones.new(name=foot_roll_back)
+    foot_roll_back_name = 'roll_back_' + foot_name
+    ebone = ebones.new(name=foot_roll_back_name)
     ebone.head = hit_loc
     ebone.tail = third_point
-    ebone.roll = ebones[foot].roll
-    ebone.parent = ebones[ik_foot_main]
-    bone_settings(name=foot_roll_back, layer=ctrl_ik_extra_layer, group=ik_group, deform=False,
-                  lock_loc=True, lock_rot=False, lock_scale=True, type=None)
+    ebone.roll = ebones[foot_name].roll
+    ebone.parent = ebones[ik_foot_main_name]
+    
+    bone_settings(bone_name=foot_roll_back_name, 
+                  layer_index=Constants.ctrl_ik_extra_layer, 
+                  group_name=ik_group_name, 
+                  lock_loc=True, 
+                  lock_scale=True
+                  )
 
     # foot roll front
     bpy.ops.object.mode_set(mode='EDIT')
     ebones = rig.data.edit_bones
-    foot_roll_front = 'roll_front_' + foot
-    ebone = ebones.new(name=foot_roll_front)
-    ebone.head = ebones[toes].head
+    foot_roll_front_name = 'roll_front_' + foot_name
+    ebone = ebones.new(name=foot_roll_front_name)
+    ebone.head = ebones[toes_name].head
     ebone.tail = third_point
-    ebone.roll = ebones[foot].roll
-    ebone.parent = ebones[foot_roll_back]
-    ebones[ik_prefix + foot].parent = ebones[foot_roll_front]
-    bone_settings(name=foot_roll_front, layer=ctrl_ik_extra_layer, group=ik_group, deform=False,
-                  lock_loc=True, lock_rot=False, lock_scale=True, type=None)
+    ebone.roll = ebones[foot_name].roll
+    ebone.parent = ebones[foot_roll_back_name]
+    ebones[ik_prefix + foot_name].parent = ebones[foot_roll_front_name]
+    
+    bone_settings(bone_name=foot_roll_front_name, 
+                  layer_index=Constants.ctrl_ik_extra_layer, 
+                  group_name=ik_group_name, 
+                  lock_loc=True, 
+                  lock_scale=True
+                  )
 
     # foot roll main
     bpy.ops.object.mode_set(mode='EDIT')
     ebones = rig.data.edit_bones
-    foot_roll_main = 'roll_main_' + foot
-    ebone = ebones.new(name=foot_roll_main)
-    ebone.head = ebones[foot].head
-    length = get_distance(ebones[foot].head, ebones[foot].tail)
+    foot_roll_main_name = 'roll_main_' + foot_name
+    ebone = ebones.new(name=foot_roll_main_name)
+    ebone.head = ebones[foot_name].head
+    length = get_distance(ebones[foot_name].head, ebones[foot_name].tail)
     ebone.tail = ebone.head + Vector((0, length, 0))
-    ebone.roll = ebones[foot].roll
-    ebone.parent = ebones[ik_foot_main]
-    bone_settings(name=foot_roll_main, layer=ctrl_ik_layer, group=ik_group, deform=False, lock_loc=True,
-                  lock_rot=False, lock_scale=True, type='ik')
-    set_bone_shape(bone_name=foot_roll_main, shape='foot_roll', transform_bone=None,
-                   auto_scale_with_offset=None, manual_scale=target_shape_size, shape_bone='LEAF',
-                   keep_rot_when_radius_check=True, use_bone_size=False, shape_bone_parent_override=False)
-    relevant_bones.append(foot_roll_main)
+    ebone.roll = ebones[foot_name].roll
+    ebone.parent = ebones[ik_foot_main_name]
+    
+    bone_settings(bvh_tree=bvh_tree, 
+                  shape_collection=shape_collection, 
+                  bone_name=foot_roll_main_name, 
+                  layer_index=Constants.ctrl_ik_layer, 
+                  group_name=ik_group_name, 
+                  lock_loc=True,
+                  lock_scale=True,
+                  bone_shape_name='foot_roll', 
+                  bone_shape_pos='TAIL', 
+                  bone_shape_manual_scale=Constants.target_shape_size,
+                  bone_type=Constants.ik_type
+                  )
+    relevant_bone_names.append(foot_roll_main_name)
 
-    # parent pole target to foot_roll_main
+    # parent pole target to foot_roll_main_name
     bpy.ops.object.mode_set(mode='EDIT')
     ebones = rig.data.edit_bones
-    ebones['target_' + pole_target].parent = ebones[ik_foot_main]
+    ebones['target_' + pole_target_name].parent = ebones[ik_foot_main_name]
 
     # ik_toes parent
-    ik_toes_parent = ik_prefix + 'parent_' + toes
-    duplicate_bone(source_name=ik_prefix + toes, new_name=ik_toes_parent, parent_name=ik_prefix + foot,
-                   roll_override=False, length_override=None)
-    bone_settings(name=ik_toes_parent, layer=ctrl_ik_extra_layer, group=None, deform=False, lock_loc=True,
-                  lock_rot=False, lock_scale=True, type=None)
+    ik_toes_parent_name = ik_prefix + 'parent_' + toes_name
+    duplicate_bone(source_name=ik_prefix + toes_name, 
+                   new_name=ik_toes_parent_name, 
+                   parent_name=ik_prefix + foot_name
+                   )
+    bone_settings(bone_name=ik_toes_parent_name, 
+                  layer_index=Constants.ctrl_ik_extra_layer, 
+                  lock_loc=True,
+                  lock_scale=True
+                  )
     bpy.ops.object.mode_set(mode='EDIT')
     ebones = rig.data.edit_bones
-    ebones[ik_prefix + toes].parent = ebones[ik_toes_parent]
+    ebones[ik_prefix + toes_name].parent = ebones[ik_toes_parent_name]
 
     # relegate old ik_foot bone
-    set_bone_only_layer(bone_name=ik_prefix + foot, layer_index=ctrl_ik_extra_layer)
+    set_bone_only_layer(bone_name=ik_prefix + foot_name, 
+                        layer_index=Constants.ctrl_ik_extra_layer
+                        )
     # update snap_info
     bpy.ops.object.mode_set(mode='POSE')
     pbones = rig.pose.bones
     old_snap_info = pbones['module_props__' + module]["snapinfo_3bonelimb_0"]
-    old_snap_info[9], old_snap_info[10], old_snap_info[11] = snap_target_foot, ik_foot_main, foot_roll_main
+    old_snap_info[9], old_snap_info[10], old_snap_info[11] = snap_target_foot_name, ik_foot_main_name, foot_roll_main_name
     pbones['module_props__' + module]["snapinfo_3bonelimb_0"] = old_snap_info
 
     bpy.ops.object.mode_set(mode='POSE')
     pbones = rig.pose.bones
     # foot roll constraints:
     # foot roll front
-    if foot_toes_bend_axis == '-X':
+    if toes_bend_axis == '-X':
         use_x = True
         use_z = False
 
-    pbone = pbones[foot_roll_front]
+    pbone = pbones[foot_roll_front_name]
     c = pbone.constraints.new('COPY_ROTATION')
     c.name = 'copy foot_roll_main'
     c.target = rig
-    c.subtarget = foot_roll_main
+    c.subtarget = foot_roll_main_name
     c.use_x = use_x
     c.use_y = False
     c.use_z = use_z
@@ -308,7 +434,7 @@ def biped_leg(module, chain, pole_target, parent_pt_to_ik_target, shin_bend_axis
     c.owner_space = 'LOCAL'
     c.influence = 1
 
-    if foot_toes_bend_axis == '-X':
+    if toes_bend_axis == '-X':
         min_x = 0
         max_x = radians(180)
         min_z = 0
@@ -329,16 +455,16 @@ def biped_leg(module, chain, pole_target, parent_pt_to_ik_target, shin_bend_axis
     c.min_z = min_z
     c.max_z = max_z
 
-    if foot_toes_bend_axis == '-X':
+    if toes_bend_axis == '-X':
         use_x = True
         use_z = False
 
     # foot roll back
-    pbone = pbones[foot_roll_back]
+    pbone = pbones[foot_roll_back_name]
     c = pbone.constraints.new('COPY_ROTATION')
-    c.name = 'copy foot_roll_main'
+    c.name = 'copy foot_roll_main_name'
     c.target = rig
-    c.subtarget = foot_roll_main
+    c.subtarget = foot_roll_main_name
     c.use_x = use_x
     c.use_y = False
     c.use_z = use_z
@@ -350,7 +476,7 @@ def biped_leg(module, chain, pole_target, parent_pt_to_ik_target, shin_bend_axis
     c.owner_space = 'LOCAL'
     c.influence = 1
 
-    if foot_toes_bend_axis == '-X':
+    if toes_bend_axis == '-X':
         min_x = 0
         max_x = radians(180)
         min_z = 0
@@ -372,13 +498,13 @@ def biped_leg(module, chain, pole_target, parent_pt_to_ik_target, shin_bend_axis
     c.max_z = max_z
 
     # foot roll main
-    if foot_toes_bend_axis == '-X':
+    if toes_bend_axis == '-X':
         min_x = radians(-180)
         max_x = radians(180)
         min_z = 0
         max_z = 0
 
-    pbone = pbones[foot_roll_main]
+    pbone = pbones[foot_roll_main_name]
     c = pbone.constraints.new('LIMIT_ROTATION')
     c.name = 'limit rotation'
     c.owner_space = 'LOCAL'
@@ -395,15 +521,15 @@ def biped_leg(module, chain, pole_target, parent_pt_to_ik_target, shin_bend_axis
     c.max_z = max_z
 
     # ik_toes_parent
-    if foot_toes_bend_axis == '-X':
+    if toes_bend_axis == '-X':
         use_x = True
         use_z = False
 
-    pbone = pbones[ik_toes_parent]
+    pbone = pbones[ik_toes_parent_name]
     c = pbone.constraints.new('COPY_ROTATION')
     c.name = 'copy foot_roll_front'
     c.target = rig
-    c.subtarget = foot_roll_front
+    c.subtarget = foot_roll_front_name
     c.use_x = use_x
     c.use_y = False
     c.use_z = use_z
@@ -415,10 +541,39 @@ def biped_leg(module, chain, pole_target, parent_pt_to_ik_target, shin_bend_axis
     c.owner_space = 'LOCAL'
     c.influence = 1
 
-    bone_visibility(prop_bone_name, module, relevant_bones, ik_ctrl='ik')
+    bone_visibility(prop_bone_name=prop_bone_name, 
+                    module=module, 
+                    relevant_bone_names=relevant_bone_names, 
+                    ik_ctrl='ik'
+                    )
 
     # set module name on relevant bones (used by the 'N-panel' interface)
-    set_module_on_relevant_bones(relevant_bone_names, module=module)
+    set_module_on_relevant_bones(relevant_bone_names=relevant_bone_names, 
+                                 module=module
+                                 )
 
     # make the 'Snap&Key' operator recognize this module
-    snappable_module(module)
+    snappable_module(module=module)
+
+    # TWIST BONES
+    create_twist_bones(bvh_tree=bvh_tree, 
+                       shape_collection=shape_collection, 
+                       source_bone_name=thigh_name, 
+                       count=thigh_twist_count,
+                       upper_or_lower_limb='UPPER', 
+                       twist_target_distance=Constants.twist_target_distance, 
+                       end_affector_name='', 
+                       influences=Constants.forearm_twist_influences, 
+                       is_thigh=True
+                       )
+    create_twist_bones(bvh_tree=bvh_tree, 
+                       shape_collection=shape_collection, 
+                       source_bone_name=shin_name, 
+                       count=shin_twist_count,
+                       upper_or_lower_limb='LOWER', 
+                       twist_target_distance=Constants.twist_target_distance, 
+                       end_affector_name=foot_name, 
+                       influences=Constants.shin_twist_influences, 
+                       is_thigh=False
+                       )
+                       

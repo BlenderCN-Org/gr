@@ -471,10 +471,10 @@ def biped_torso(bvh_tree, shape_collection, module, chain, first_parent_name):
                                      
     # ctrl bone shape transform
     bpy.ops.object.mode_set(mode='POSE')
-    pbone = rig.pose.bones
-    pbone[ctrl_hips].custom_shape_transform = pbones[ik_prefix + chain[1]]                 
-    pbone[ctrl_waist].custom_shape_transform = pbones[ik_prefix + chain[2]]                   
-    pbone[ctrl_chest].custom_shape_transform = pbones[ik_prefix + chain[3]]  
+    pbones = rig.pose.bones
+    pbones[ctrl_hips].custom_shape_transform = pbones[ik_prefix + chain[1]]                 
+    pbones[ctrl_waist].custom_shape_transform = pbones[ik_prefix + chain[2]]                   
+    pbones[ctrl_chest].custom_shape_transform = pbones[ik_prefix + chain[3]]  
 
     # LOW-LEVEL TO IK RIG CONSTRAINTS
     bpy.ops.object.mode_set(mode='POSE')

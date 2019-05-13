@@ -128,6 +128,7 @@ class Constants():
     sides = ['_l', '_r']
     fk_prefix = 'fk_'
     ik_prefix = 'ik_'
+    ctrl_prefix = 'ctrl_'
 
     # LAYERS
     # game bones
