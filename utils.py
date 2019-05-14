@@ -26,6 +26,25 @@ from math import radians, sqrt
 from .constants import Constants
 
 
+def report (self, item, error_or_info):
+    self.report({error_or_info}, item)
+
+
+
+def popup (item, icon):
+    def draw(self, context):
+        self.layout.label(text=item)
+    bpy.context.window_manager.popup_menu(draw, title="GYAZ Game Rigger", icon=icon)
+   
+    
+def get_active_action (obj):
+    if obj.animation_data != None:
+        action = obj.animation_data.action
+    else:
+        action = None
+    return action
+
+
 def link_collection(collection_name, path):
     # path to the blend
     filepath = path
@@ -253,17 +272,19 @@ def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_inde
                 v += ray_start
                 
                 check_points.append(v)
-            
+        
             # cast rays -> look for geo
             hit_distances = []
             for p in check_points:
+                dir = p - ray_start
+                dir.normalize()
                 hit_loc, hit_nor, hit_index, hit_dist = bvh_tree.ray_cast(ray_start, 
-                                                                          p - ray_start, 
+                                                                          dir,
                                                                           10
                                                                           )
                 if hit_dist is not None:
                     hit_distances.append(hit_dist)
-            
+        
             final_shape_scale = max(hit_distances) * Constants.bone_shape_scale_multiplier if len(hit_distances) > 0 else fallback_shape_size
             
         else:
@@ -309,7 +330,7 @@ def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_inde
                 pbone = pbones['shape_' + bone_name]
                 # layer
                 bools = [False] * 32
-                bools[Constants.misc_layer] = True
+                bools[Constants.shape_layer] = True
                 bones['shape_' + bone_name].layers = bools
                 # use deform
                 bone.use_deform = False
@@ -327,14 +348,51 @@ def bone_settings(bvh_tree=None, shape_collection=None, bone_name='', layer_inde
     else:
         pbone.custom_shape = None
         
+
+# transform_bone_parent_override is only used if transform_bone_name == REVERSE_RAYCAST
+def set_bone_shape(shape_collection, bone_name, bone_shape_name, bone_shape_scale, transform_bone_name='', transform_bone_parent_override='', bvh_tree=None):
+    rig = bpy.context.object
+    
+    if transform_bone_name == 'REVERSE_RAYCAST' or transform_bone_name == 'UP_RAYCAST':
+        if bpy.context.mode != 'ARMATURE_EDIT':
+            bpy.ops.object.mode_set(mode='EDIT')
+        bone_pos = rig.data.edit_bones[bone_name].head
         
-def set_bone_shape(shape_collection, bone_name, bone_shape_name, bone_shape_scale, transform_bone_name=''):
-    bpy.ops.object.mode_set(mode='POSE')
+        if transform_bone_name == 'REVERSE_RAYCAST':
+            hit_loc, hit_nor, hit_index, hit_dist = bvh_tree.ray_cast(bone_pos + Vector((0, -5, 0)), 
+                                                                      Vector((0, 1, 0)), 
+                                                                      10
+                                                                      )
+        elif transform_bone_name == 'UP_RAYCAST':
+            hit_loc, hit_nor, hit_index, hit_dist = bvh_tree.ray_cast(bone_pos, 
+                                                                      Vector((0, 0, 1)), 
+                                                                      10
+                                                                      )            
+            
+        if hit_loc is not None:
+            ebone = rig.data.edit_bones.new('shape_' + bone_name)
+            new_shape_bone_name = ebone.name
+            ebones = rig.data.edit_bones
+            ebone.head = hit_loc
+            ebone.tail = hit_loc + Vector((0, 0, Constants.face_shape_size))
+            ebone.roll = 0
+            ebone.parent = ebones[bone_name] if transform_bone_parent_override == '' else ebones[transform_bone_parent_override]
+            
+            bpy.ops.object.mode_set(mode='POSE')
+            bools = [False] * 32
+            bools[Constants.shape_layer] = True
+            rig.data.bones[new_shape_bone_name].layers = bools
+    
+    if bpy.context.mode != 'POSE':
+        bpy.ops.object.mode_set(mode='POSE')
     pbones = bpy.context.object.pose.bones
     wgt = shape_collection.objects['GYAZ_game_rigger_WIDGET__' + bone_shape_name]
     pbones[bone_name].custom_shape = wgt
-    if transform_bone_name != '':        
-        pbones[bone_name].custom_shape_transform = pbones[transform_bone_name]              
+    if transform_bone_name != '':
+        if transform_bone_name == 'REVERSE_RAYCAST' or transform_bone_name == 'UP_RAYCAST':
+            pbones[bone_name].custom_shape_transform = pbones[new_shape_bone_name] 
+        else:
+            pbones[bone_name].custom_shape_transform = pbones[transform_bone_name]              
     pbones[bone_name].use_custom_shape_bone_size = False
     pbones[bone_name].custom_shape_scale = bone_shape_scale
 
@@ -686,15 +744,27 @@ def calculate_pole_target_location(b1, b2, b3, pole_target_distance):
     rig = bpy.context.object
     ebones = rig.data.edit_bones
 
-    midpoint = (ebones[b1].head + ebones[b3].head) / 2
+    midpoint = (ebones[b1].head + ebones[b3].head) * .5
     difference = ebones[b2].head - midpoint
     # calculate multiplier for desired target distance
     current_distance = get_distance(Vector((0, 0, 0)), difference)
     multiplier = pole_target_distance / current_distance
-    #
-    pole_pos = difference * multiplier + ebones[b2].head
+    
+    return difference * multiplier + ebones[b2].head
 
-    return pole_pos
+
+def calculate_pole_target_location_pbone (b1, b2, b3, pole_target_distance):
+    pbones = bpy.context.object.pose.bones
+    midpoint = ( pbones[b1].matrix.translation + pbones[b3].matrix.translation ) * .5
+    difference = pbones[b2].matrix.translation - midpoint
+    # calculate multiplier for desired target distance
+    current_distance = get_distance (Vector ((0, 0, 0)), difference)
+    multiplier = pole_target_distance / current_distance
+    return difference * multiplier + pbones[b2].matrix.translation
+
+
+def lerp (A, B, alpha):    
+    return A*(1-alpha)+B*(alpha)     
 
 
 def calculate_pole_target_location_2(b1, b2, b3, pole_target_distance, b2_bend_axis):

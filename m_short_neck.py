@@ -34,6 +34,8 @@ from .utils import prop_to_drive_constraint
 from .utils import bone_visibility
 from .utils import get_parent_name
 from .utils import create_leaf_bone
+from .utils import set_bone_only_layer
+
 
 def short_neck(bvh_tree, shape_collection, module, bone_name, distributor_parent_name, ik_rot_bone_name, ik_loc_bone_name, use_twist):
     
@@ -222,6 +224,9 @@ def short_neck(bvh_tree, shape_collection, module, bone_name, distributor_parent
                      start_middle=True, 
                      parent_name=distributor_name
                      )
+    set_bone_only_layer(bone_name=shape_bone_name, 
+                        layer_index=Constants.misc_layer
+                        )
     # use fk_neck's bone scale
     bpy.ops.object.mode_set(mode='POSE')
     pbones = rig.pose.bones

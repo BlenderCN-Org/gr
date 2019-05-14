@@ -30,7 +30,7 @@ class Constants():
     target_shape_size = 0.05
     general_bone_size = 0.05
     pole_target_distance = 0.5
-    finger_shape_size = 0.01
+    finger_shape_size = 0.015
     face_shape_size = 0.005
     look_target_size = face_shape_size * 5
     look_target_offset = 0.5
@@ -156,6 +156,8 @@ class Constants():
 
     target_layer = 11
     source_layer = 23
+    
+    shape_layer = 31
 
     # GROUPS
     base_group = 'base'
@@ -190,3 +192,4 @@ class Constants():
     ctrl_type = 'ctrl'
     spring_type = 'spring'
     touch_type = 'touch'
+    face_type = 'face'

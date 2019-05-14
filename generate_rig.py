@@ -40,6 +40,9 @@ from .m_head import head
 from .m_spring import spring_chest
 from .m_spring import spring_belly
 from .m_spring import spring_bottom
+from .m_fingers import fingers
+from .m_face import face_base
+from .m_face import face_detail
 
 
 class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
@@ -177,7 +180,7 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                        distributor_parent_name=ctrl_prefix + 'torso', 
                        ik_rot_bone_name=ctrl_prefix + 'chest', 
                        ik_loc_bone_name=ik_prefix + 'spine_3', 
-                       use_twist=True
+                       use_twist=generate__twist_neck
                        )
             head(bvh_tree, 
                  shape_collection, 
@@ -193,13 +196,14 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                          source_bone_name='hand_r', 
                          parent_name='root_extract'
                          )
-            spring_belly(bvh_tree, 
-                         shape_collection, 
-                         module='spring', 
-                         waist_bone_names=['spine_1', 'spine_2'], 
-                         loc_pelvis_front='loc_pelvis_front', 
-                         loc_sternum_lower='loc_sternum_lower'
-                         )
+            if generate__spring_belly:
+                spring_belly(bvh_tree, 
+                             shape_collection, 
+                             module='spring', 
+                             waist_bone_names=['spine_1', 'spine_2'], 
+                             loc_pelvis_front='loc_pelvis_front', 
+                             loc_sternum_lower='loc_sternum_lower'
+                             )
             touch_bone(bvh_tree, 
                        shape_collection, 
                        module='spine', 
@@ -262,19 +266,21 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                           thigh_twist_count=generate__twist_thigh_count, 
                           shin_twist_count=generate__twist_shin_count
                           )
-                spring_chest(bvh_tree, 
-                             shape_collection, 
-                             module='spring', 
-                             chest_name='spring_chest' + side, 
-                             shoulder_name='shoulder' + side
-                             )
-                spring_bottom(bvh_tree, 
-                              shape_collection, 
-                              module='spring', 
-                              source_bone_name='thigh' + side, 
-                              parent_name='hips', 
-                              side=side,
-                              )
+                if generate__spring_chest:
+                    spring_chest(bvh_tree, 
+                                 shape_collection, 
+                                 module='spring', 
+                                 chest_name='spring_chest' + side, 
+                                 shoulder_name='shoulder' + side
+                                 )
+                if generate__spring_bottom:
+                    spring_bottom(bvh_tree, 
+                                  shape_collection, 
+                                  module='spring', 
+                                  source_bone_name='thigh' + side, 
+                                  parent_name='hips', 
+                                  side=side,
+                                  )
                 touch_bone(bvh_tree, 
                            shape_collection, 
                            module='arm' + side, 
@@ -291,7 +297,27 @@ class Op_GYAZ_GameRig_GenerateRig(bpy.types.Operator):
                            side=side, 
                            bone_shape_up=True
                            )
-                          
+                if generate__fingers:
+                    fingers(bvh_tree,
+                            shape_collection, 
+                            module='fingers' + side, 
+                            finger_names=['thumb', 'pointer', 'middle', 'ring', 'pinky'], 
+                            side=side
+                            )
+            
+            if generate__face_eyes:
+                face_base(bvh_tree,
+                          shape_collection, 
+                          module='face', 
+                          use_jaw=generate__face_jaw, 
+                          parent_name='head'
+                          )
+                if generate__face_detail:
+                    face_detail(bvh_tree,
+                                shape_collection, 
+                                module='face'
+                                )
+            
             finalize(merged_character_mesh=merged_character_mesh)
 
         # safety checks

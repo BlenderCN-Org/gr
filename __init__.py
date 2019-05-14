@@ -61,7 +61,7 @@ def unregister():
 register()
 
 
-modulesNames = ['interface', 'generate_rig', 'manuel_bastioni_to_gyaz_source_rig']
+modulesNames = ['ui', 'generate_rig', 'manuel_bastioni_to_gyaz_source_rig']
  
 import sys
 import importlib

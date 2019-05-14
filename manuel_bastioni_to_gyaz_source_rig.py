@@ -1,7 +1,9 @@
 import bpy
 from bpy.types import Panel, Operator
 from bpy.props import *
-from mathutils import Vector
+from mathutils import Vector, Euler, Quaternion
+from math import radians, degrees
+from mathutils.bvhtree import BVHTree
 
     
 class Op_GYAZ_ManuelBastioniRigToGYAZSourceRig (bpy.types.Operator):
@@ -21,11 +23,6 @@ class Op_GYAZ_ManuelBastioniRigToGYAZSourceRig (bpy.types.Operator):
         arm_bend = 45
         finger_bend = -15
 
-
-        import bpy
-        from mathutils import Euler, Quaternion
-        from math import radians, degrees
-
         scene = bpy.context.scene
         obj = bpy.context.object
         meshes = obj.children
@@ -41,9 +38,7 @@ class Op_GYAZ_ManuelBastioniRigToGYAZSourceRig (bpy.types.Operator):
         
         #################################################################################
         #raycast function
-        
-        from mathutils.bvhtree import BVHTree
-        my_tree = BVHTree.FromObject(scene.objects[meshes[0].name], scene)
+        my_tree = BVHTree.FromObject(scene.objects[meshes[0].name], bpy.context.depsgraph)
             
         rig = obj
         
@@ -134,8 +129,8 @@ class Op_GYAZ_ManuelBastioniRigToGYAZSourceRig (bpy.types.Operator):
             def merge_and_remove_weight (weight_to_merge, weight_to_merge_to):    
                 for mesh in meshes:
                     bpy.ops.object.select_all (action='DESELECT')
-                    mesh.select = True
-                    scene.objects.active = mesh
+                    mesh.select_set (True)
+                    bpy.context.view_layer.objects.active = mesh
                     #mix weights if mesh has those weights
                     vgroups = mesh.vertex_groups
                     if vgroups.get (weight_to_merge) != None:
@@ -174,10 +169,13 @@ class Op_GYAZ_ManuelBastioniRigToGYAZSourceRig (bpy.types.Operator):
                 
                     merge_and_remove_weight (weight_to_merge, weight_to_merge_to)
                           
-         
+            
+            for mesh in meshes:
+                mesh.data.update ()
+            
             bpy.ops.object.select_all (action='DESELECT')
-            rig.select = True
-            scene.objects.active = rig
+            rig.select_set (True)
+            bpy.context.view_layer.objects.active = rig
             bpy.ops.object.mode_set (mode='EDIT')
             ebones = rig.data.edit_bones
 
@@ -294,8 +292,8 @@ class Op_GYAZ_ManuelBastioniRigToGYAZSourceRig (bpy.types.Operator):
                 for mesh in meshes:
                     bpy.ops.object.mode_set (mode='OBJECT')
                     bpy.ops.object.select_all (action='DESELECT')
-                    mesh.select = True
-                    scene.objects.active = mesh                    
+                    mesh.select_set (True)
+                    bpy.context.view_layer.objects.active = mesh                    
                                 
                     #remove shape keys
                     try:
@@ -305,15 +303,15 @@ class Op_GYAZ_ManuelBastioniRigToGYAZSourceRig (bpy.types.Operator):
                     
                     #apply armature modifier
                     old_mesh = mesh.data
-                    new_mesh = mesh.to_mesh (scene=scene, apply_modifiers=True, settings='RENDER', calc_tessface=False, calc_undeformed=False)
+                    new_mesh = mesh.to_mesh (bpy.context.depsgraph, apply_modifiers=True, calc_undeformed=False)
                     mesh.data = new_mesh
                     bpy.data.meshes.remove (old_mesh)
 
 
             bpy.ops.object.mode_set (mode='OBJECT')
             bpy.ops.object.select_all (action='DESELECT')
-            rig.select = True
-            scene.objects.active = rig                 
+            rig.select_set (True)
+            bpy.context.view_layer.objects.active = rig                 
             
             #apply pose
             bpy.ops.object.mode_set (mode='POSE')
@@ -375,8 +373,8 @@ class Op_GYAZ_ManuelBastioniRigToGYAZSourceRig (bpy.types.Operator):
             #finalize
             bpy.ops.object.mode_set (mode='OBJECT')
             bpy.ops.object.select_all (action='DESELECT')
-            rig.select = True
-            scene.objects.active = rig
+            rig.select_set (True)
+            bpy.context.view_layer.objects.active = rig
             
             #GYAZ stamp
             rig.data['GYAZ_game_rig'] = True
